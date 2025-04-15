@@ -116,7 +116,7 @@ plt.title("Zebrane dane przez sensory")
 plt.legend()
 
 plt.tight_layout()
-plt.savefig("temp2.png")
+plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/temp2.png")
 
 # Visualization of sensor positions and their coverage areas
 plt.figure(figsize=(6, 6))
@@ -138,4 +138,4 @@ plt.xlabel("X")
 plt.ylabel("Y")
 plt.title("Położenie sensorów i ich obszary zasięgu")
 plt.legend()
-plt.savefig("temp.png")
+plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/temp.png")

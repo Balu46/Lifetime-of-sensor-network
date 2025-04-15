@@ -1,101 +1,129 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from collections import deque
 
-# Parameters of the sensor network
-NUM_NODES = 10  # Number of sensor nodes
-BATTERY_CAPACITY = 100  # Maximum energy capacity (in units)
-TRANSMISSION_COST = 5  # Energy cost per data transmission
-TIME_STEPS = 50  # Number of simulation steps
-NETWORK_AREA = (100, 100)  # Network area size (units)
+# Set device to GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Sensor network simulation class
-class SensorNetwork:
-    def __init__(self, num_nodes, area_size):
-        self.num_nodes = num_nodes
-        self.area_size = area_size
-        self.reset()
-    
-    def reset(self):
-        """Initializes sensor nodes with full battery, random positions, and coverage radius."""
-        self.energy_levels = np.full(self.num_nodes, BATTERY_CAPACITY)
-        self.data_collected = np.zeros(self.num_nodes)
-        self.positions = np.random.rand(self.num_nodes, 2) * self.area_size  # Random sensor positions
-        self.coverage_radius = np.random.uniform(10, 20, self.num_nodes)  # Sensor coverage radiusreset
-        return self.energy_levels.copy()
-    
-    def step(self):
-        """Each sensor randomly decides whether to transmit data, consuming energy."""
-        for i in range(self.num_nodes):
-            if self.energy_levels[i] > TRANSMISSION_COST and random.random() > 0.3:  # 70% chance to transmit
-                self.energy_levels[i] -= TRANSMISSION_COST
-                self.data_collected[i] += self.coverage_radius[i] / 10  # More data collected with a larger coverage radius
-    
-    def is_active(self):
-        """Checks if at least one sensor still has enough energy to operate."""
-        return np.any(self.energy_levels > TRANSMISSION_COST)
+# Parameters
+NUM_NODES = 10
+BATTERY_CAPACITY = 100
+TRANSMISSION_COST = 5
+TIME_STEPS = 100
+EPISODES = 50
+NETWORK_AREA = (100, 100)
+STATE_SIZE = 2  # [battery_level, coverage_radius]
+ACTION_SIZE = 2  # [sleep, transmit]
+GAMMA = 0.95
+ALPHA = 0.001
+EPSILON_START = 1.0
+EPSILON_END = 0.01
+EPSILON_DECAY = 0.995
+MEMORY_SIZE = 1000
+BATCH_SIZE = 32
 
-# Initialize the network
-network = SensorNetwork(NUM_NODES, NETWORK_AREA)
-energy_over_time = []
-data_over_time = []
+# Neural Network for Q-value approximation
+class DQN(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(DQN, self).__init__()
+        self.fc1 = nn.Linear(input_size, 24)
+        self.fc2 = nn.Linear(24, 24)
+        self.out = nn.Linear(24, output_size)
 
-# Sensor network simulation
-for t in range(TIME_STEPS):
-    if not network.is_active():
-        break  # Stop simulation when all sensors are depleted
-    network.step()
-    energy_over_time.append(network.energy_levels.copy())
-    data_over_time.append(network.data_collected.copy())
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.out(x)
 
-# Convert recorded data to NumPy arrays
-energy_over_time = np.array(energy_over_time)
-data_over_time = np.array(data_over_time)
+# Sensor agent with its own DQN
+class SensorAgent:
+    def __init__(self):
+        self.model = DQN(STATE_SIZE, ACTION_SIZE).to(device)
+        self.target_model = DQN(STATE_SIZE, ACTION_SIZE).to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=ALPHA)
+        self.memory = deque(maxlen=MEMORY_SIZE)
+        self.epsilon = EPSILON_START
 
-# Visualization of energy levels over time
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
-for i in range(NUM_NODES):
-    plt.plot(energy_over_time[:, i], label=f"Sensor {i}")
-plt.xlabel("Time")
-plt.ylabel("Energy Level")
-plt.title("Energy Level Changes in Sensors")
-plt.legend()
+    def act(self, state):
+        if random.random() < self.epsilon:
+            return random.choice([0, 1])  # Explore
+        state_tensor = torch.FloatTensor(state).to(device)
+        with torch.no_grad():
+            q_values = self.model(state_tensor)
+        return torch.argmax(q_values).item()  # Exploit
 
-# Visualization of collected data over time
-energy_over_time = np.array(energy_over_time)
-data_over_time = np.array(data_over_time)
+    def remember(self, state, action, reward, next_state):
+        self.memory.append((state, action, reward, next_state))
 
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
-for i in range(NUM_NODES):
-    plt.plot(energy_over_time[:, i], label=f"Sensor {i}")
-plt.xlabel("Czas")
-plt.ylabel("Poziom energii")
-plt.title("Zmiana poziomu energii w sensorach")
-plt.legend()
+    def replay(self):
+        if len(self.memory) < BATCH_SIZE:
+            return
+        batch = random.sample(self.memory, BATCH_SIZE)
+        for state, action, reward, next_state in batch:
+            state_tensor = torch.FloatTensor(state).to(device)
+            next_state_tensor = torch.FloatTensor(next_state).to(device)
+            target = reward + GAMMA * torch.max(self.target_model(next_state_tensor)).item()
+            current_q = self.model(state_tensor)[action]
+            loss = (current_q - target) ** 2
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
-plt.subplot(1, 2, 2)
-for i in range(NUM_NODES):
-    plt.plot(data_over_time[:, i], label=f"Sensor {i}")
-plt.xlabel("Czas")
-plt.ylabel("Liczba przesłanych pakietów")
-plt.title("Zebrane dane przez sensory")
-plt.legend()
+    def update_target_model(self):
+        self.target_model.load_state_dict(self.model.state_dict())
 
-plt.tight_layout()
-plt.savefig("temp2.png")
+# Initialize agents and environment
+agents = [SensorAgent() for _ in range(NUM_NODES)]
+positions = np.random.rand(NUM_NODES, 2) * NETWORK_AREA
+coverage_radius = np.random.uniform(10, 20, NUM_NODES)
 
-# Visualization of sensor positions and their coverage areas
+# Simulation
+for episode in range(EPISODES):
+    energy_levels = np.full(NUM_NODES, BATTERY_CAPACITY)
+    data_collected = np.zeros(NUM_NODES)
+
+    for t in range(TIME_STEPS):
+        if np.all(energy_levels <= TRANSMISSION_COST):
+            break
+
+        for i in range(NUM_NODES):
+            if energy_levels[i] <= TRANSMISSION_COST:
+                continue  # Sensor sleeps due to low battery
+
+            state = [energy_levels[i] / BATTERY_CAPACITY, coverage_radius[i] / 20.0]
+            action = agents[i].act(state)
+
+            if action == 1 and energy_levels[i] > TRANSMISSION_COST:
+                energy_levels[i] -= TRANSMISSION_COST
+                reward = coverage_radius[i] / 10
+                data_collected[i] += reward
+            else:
+                reward = 0
+
+            next_state = [energy_levels[i] / BATTERY_CAPACITY, coverage_radius[i] / 20.0]
+            agents[i].remember(state, action, reward, next_state)
+            agents[i].replay()
+
+    for agent in agents:
+        agent.update_target_model()
+        if agent.epsilon > EPSILON_END:
+            agent.epsilon *= EPSILON_DECAY
+
+# Visualize sensor positions and coverage
 plt.figure(figsize=(6, 6))
-plt.scatter(network.positions[:, 0], network.positions[:, 1], c='blue', label='Sensory')
+plt.scatter(positions[:, 0], positions[:, 1], c='blue', label='Sensors')
 for i in range(NUM_NODES):
-    circle = plt.Circle((network.positions[i, 0], network.positions[i, 1]), network.coverage_radius[i], color='r', alpha=0.3)
+    circle = plt.Circle((positions[i, 0], positions[i, 1]), coverage_radius[i], color='r', alpha=0.3)
     plt.gca().add_patch(circle)
 plt.xlim(0, NETWORK_AREA[0])
 plt.ylim(0, NETWORK_AREA[1])
 plt.xlabel("X")
 plt.ylabel("Y")
-plt.title("Położenie sensorów i ich obszary zasięgu")
+plt.title("Sensor Positions and Coverage (After Training)")
 plt.legend()
-plt.savefig("temp.png")
+plt.grid(True)
+plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/temp4.png")
