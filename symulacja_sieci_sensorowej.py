@@ -11,8 +11,17 @@ TIME_STEPS = 50  # Number of simulation steps
 NETWORK_AREA = (100, 100)  # Network area size (units)
 NUM_OF_DATA_IN_BACH = 10
 NUM_OF_MAIN_UNITS = 1
+NUM_OF_SENSORS_IN_NETWORK = 10
 
-
+class sensor:
+    def __init__(self, area_size = NETWORK_AREA, battery_capasity = BATTERY_CAPACITY):
+        self.energy = battery_capasity
+        self.pos = (random.randint(0, area_size[0]), random.randint(0, area_size[1]))
+        self.data_to_transfer 
+        self.recived_data = []
+        self.colected_data = []
+        self.near_sensors = []
+        
         
 
 # Sensor network simulation class
@@ -83,6 +92,15 @@ for t in range(TIME_STEPS):
 # Convert recorded data to NumPy arrays
 energy_over_time = np.array(energy_over_time)
 data_over_time = np.array(data_over_time)
+
+
+
+
+
+
+
+
+
 
 # Visualization of energy levels over time
 plt.figure(figsize=(12, 6))

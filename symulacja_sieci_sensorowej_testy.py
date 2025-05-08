@@ -87,7 +87,7 @@ for episode in range(EPISODES):
     data_collected = np.zeros(NUM_NODES)
 
     for t in range(TIME_STEPS):
-        if np.all(energy_levels <= TRANSMISSION_COST):
+        if np.all(energy_levels <=   TRANSMISSION_COST):
             break
 
         for i in range(NUM_NODES):
