@@ -178,7 +178,7 @@ class SensorNetwork:
                         
             
 # Initialize the network
-network = SensorNetwork(NUM_NODES, NETWORK_AREA, NUM_OF_MAIN_UNITS)
+network = SensorNetwork(NUM_OF_SENSORS_IN_NETWORK, NETWORK_AREA, NUM_OF_MAIN_UNITS)
 energy_over_time = []
 data_over_time = []
 
