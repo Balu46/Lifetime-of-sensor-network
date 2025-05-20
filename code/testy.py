@@ -134,3 +134,5 @@ plt.ylabel("Y")
 plt.grid(True)
 plt.legend()
 plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/temp4.png")
+
+

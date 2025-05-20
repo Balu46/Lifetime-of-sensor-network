@@ -8,6 +8,7 @@ import torch as T
 import torch.nn as nn
 import torch.optim as optim
 
+
 # Parameters of the sensor network
 NUM_OF_MAIN_UNITS = 1
 NUM_OF_SENSORS_IN_NETWORK = 10 # Number of sensor nodes
@@ -207,8 +208,8 @@ class main_unit(Sensor):
        
         self.communicates = []
         self.colect_data_by_network = []
-        self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1))
-        self.agent = Agent()
+        self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1)) 
+        self.agent = Agent(gamma=0.99, epsilon=1, batch_size=64, n_actions=NUM_OF_SENSORS_IN_NETWORK, eps_end=0.01, input_dims=8,   lr = 0.003  )
         
         
     def recive_data(self, data: Data) -> bool:
@@ -257,15 +258,7 @@ class SensorNetwork:
     #     """Checks if at least one sensor still has enough energy to operate."""
     #     return np.any(self.energy_levels > TRANSMISSION_COST)
 
-          
-          
-          
-          
-          
-          
-          
-          
-          
+
           
           
 
@@ -288,127 +281,3 @@ for t in range(DURATION):
 
 print(len(network.sensors[0].colect_data_by_network))
 
-
-# # Wizualizacja
-# plt.figure(figsize=(12, 10))
-
-# # Plot main unit
-# main_unit = network.sensors[0]
-# plt.scatter(
-#     main_unit.position[0][0],
-#     main_unit.position[0][1],
-#     c='red',
-#     s=100,
-#     label='Main Unit (red)'
-# )
-
-# # Plot main unit's transfer coverage
-# main_unit_circle = plt.Circle(
-#     (main_unit.position[0][0], main_unit.position[0][1]),
-#     main_unit.transfer_coverage_distance,
-#     color='red',
-#     alpha=0.1,
-#     label='Main Unit Transfer Range'
-# )
-# plt.gca().add_patch(main_unit_circle)
-
-# # Plot sensors and their connections
-# for s in network.sensors[1:]:
-#     # Sensor point
-#     plt.scatter(
-#         s.position[0][0],
-#         s.position[0][1],
-#         c='blue',
-#         s=50
-#     )
-    
-#     # Coverage radius
-#     coverage_circle = plt.Circle(
-#         (s.position[0][0], s.position[0][1]),
-#         s.coverage_radius,
-#         color='blue',
-#         alpha=0.1,
-#         fill=False,
-#         linestyle='--',
-#         label='Sensor Coverage' if s.id == 1 else ""
-#     )
-#     plt.gca().add_patch(coverage_circle)
-    
-#     # Transfer radius
-#     transfer_circle = plt.Circle(
-#         (s.position[0][0], s.position[0][1]),
-#         s.transfer_coverage_distance,
-#         color='green',
-#         alpha=0.05,
-#         label='Sensor Transfer Range' if s.id == 1 else ""
-#     )
-#     plt.gca().add_patch(transfer_circle)
-    
-#     # Draw connections to neighbors in routing table
-#     for neighbor in s.routing_table:
-#         plt.plot(
-#             [s.position[0][0], neighbor.position[0][0]],
-#             [s.position[0][1], neighbor.position[0][1]],
-#             'gray',
-#             alpha=0.3,
-#             linewidth=0.5
-#         )
-
-# # Simulate and plot data flow paths
-# for data_packet in network.sensors[0].colect_data_by_network:
-#     path = []
-#     current_sensor_id = data_packet.device
-#     path.append(network.sensors[current_sensor_id])
-    
-#     # Trace back the path (simplified - would need actual routing info)
-#     while current_sensor_id != 0:
-#         if not network.sensors[current_sensor_id].routing_table:
-#             break
-#         next_hop = min(
-#             network.sensors[current_sensor_id].routing_table,
-#             key=lambda neighbor: np.linalg.norm(neighbor.position - main_unit.position)
-#         )
-#         path.append(next_hop)
-#         current_sensor_id = next_hop.id
-    
-#     # Draw the path
-#     for i in range(len(path)-1):
-#         plt.plot(
-#             [path[i].position[0][0], path[i+1].position[0][0]],
-#             [path[i].position[0][1], path[i+1].position[0][1]],
-#             'r-',
-#             alpha=0.5,
-#             linewidth=1.5
-#         )
-#         # Add arrow
-#         plt.arrow(
-#             path[i].position[0][0], path[i].position[0][1],
-#             (path[i+1].position[0][0] - path[i].position[0][0])*0.9,
-#             (path[i+1].position[0][1] - path[i].position[0][1])*0.9,
-#             head_width=2,
-#             head_length=3,
-#             fc='red',
-#             ec='red',
-#             alpha=0.5
-#         )
-
-# # Create custom legend
-# legend_elements = [
-#     plt.Line2D([0], [0], marker='o', color='w', label='Main Unit', markerfacecolor='red', markersize=10),
-#     plt.Line2D([0], [0], marker='o', color='w', label='Sensors', markerfacecolor='blue', markersize=10),
-#     plt.Line2D([0], [0], color='red', alpha=0.3, label='Main Unit Range', linewidth=10),
-#     plt.Line2D([0], [0], color='blue', alpha=0.3, label='Sensor Coverage', linestyle='--', linewidth=2),
-#     plt.Line2D([0], [0], color='green', alpha=0.3, label='Sensor Transfer', linewidth=10),
-#     plt.Line2D([0], [0], color='red', alpha=0.5, label='Data Flow', linewidth=1.5),
-#     plt.Line2D([0], [0], color='gray', alpha=0.3, label='Possible Connections', linewidth=0.5)
-# ]
-
-# plt.legend(handles=legend_elements, loc='upper right')
-# plt.title("Sensor Network with Coverage and Data Flow")
-# plt.xlabel("X Coordinate")
-# plt.ylabel("Y Coordinate")
-# plt.grid(True, alpha=0.3)
-# plt.xlim(0, NETWORK_AREA[0])
-# plt.ylim(0, NETWORK_AREA[1])
-# plt.tight_layout()
-# plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/sensor_network_with_flow.png")
