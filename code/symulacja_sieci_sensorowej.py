@@ -8,6 +8,7 @@ import torch as T
 import torch.nn as nn
 import torch.optim as optim
 
+
 # Parameters of the sensor network
 NUM_OF_MAIN_UNITS = 1
 NUM_OF_SENSORS_IN_NETWORK = 10 # Number of sensor nodes
@@ -207,8 +208,8 @@ class main_unit(Sensor):
        
         self.communicates = []
         self.colect_data_by_network = []
-        self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1))
-        self.agent = Agent()
+        self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1)) 
+        self.agent = Agent(gamma=0.99, epsilon=1, batch_size=64, n_actions=NUM_OF_SENSORS_IN_NETWORK, eps_end=0.01, input_dims=8,   lr = 0.003  )
         
         
     def recive_data(self, data: Data) -> bool:
