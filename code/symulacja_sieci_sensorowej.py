@@ -174,7 +174,7 @@ class Sensor:
         return 1
         
     def colect_data(self) -> bool:
-        # self.energy -= MINING_COST
+        self.energy -= MINING_COST
         mined = Data()
         mined.create_mined_data(id, 0) # 0 is always id of main unit
         if self.send_data(mined):
@@ -198,9 +198,15 @@ class Sensor:
         
         if best_neighbor.is_active:
             best_neighbor.recive_data(data)
-            # self.energy -= TRANSMISSION_COST
+            self.energy -= TRANSMISSION_COST
             return True
         return False
+    
+    def is_active(self) -> bool:
+        if self.energy <= 0:
+            self.is_active = False
+            return False
+        return True
         
 class main_unit(Sensor):
     def __init__(self, id: int, area_size = NETWORK_AREA, battery_capasity = BATTERY_CAPACITY):
@@ -243,20 +249,23 @@ class SensorNetwork:
                 if sensor != sensor_2:
                     if distance_between_2_sensors(sensor1=sensor, sensor2=sensor_2) <= (sensor.transfer_coverage_distance):
                         sensor.routing_table.append(sensor_2)   
-                        print(f'{sensor.id} : {sensor_2.id}')
+                        
       
         
     
     
     def step(self):
-        """Each sensor randomly decides whether to transmit data, consuming energy and transfering it to main unit."""
+        """Each sensor collects data and sends it to the main unit."""
         for i in range(1,self.num_sensors+1):
             self.sensors[i].colect_data()
             
             
-    # def is_active(self):
-    #     """Checks if at least one sensor still has enough energy to operate."""
-    #     return np.any(self.energy_levels > TRANSMISSION_COST)
+    def is_active(self):
+        """Checks if at least one sensor still has enough energy to operate."""
+        for sensor in self.sensors: 
+            if sensor.is_active():
+                return True
+        return False
 
           
           
