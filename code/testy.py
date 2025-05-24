@@ -18,7 +18,7 @@ BATTERY_CAPACITY = 100  # Maximum energy capacity (in units)
 TRANSMISSION_COST = 5  # Energy cost per data transmission
 MINING_COST = 1
 
-DURATION = 1  # Number of simulation steps, duration of 1 game
+DURATION = 10  # Number of simulation steps, duration of 1 game
 
 NETWORK_AREA = (100, 100)  # Network area size (units)
 
@@ -64,6 +64,10 @@ class Agent():
         self.mem_cntr = 0
 
         self.Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
+                                 input_dims=input_dims, 
+                                 fc1_dims=256, fc2_dims=256)
+        
+        self.best_Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
                                  input_dims=input_dims, 
                                  fc1_dims=256, fc2_dims=256)
 
@@ -119,7 +123,9 @@ class Agent():
 
         self.epsilon = self.epsilon - self.eps_dec if self.epsilon > self.eps_min \
                       else self.eps_min
-
+                      
+    def update_best_model(self):
+        self.best_Q_eval.load_state_dict(self.Q_eval.state_dict())
 
 class Data:
     def __init__(self):
@@ -162,7 +168,6 @@ class Sensor:
         self.energy = BATTERY_CAPACITY
         self.data_to_transfer  = []
         self.recived_data = []
-        self.routing_table = []
         self.is_sleeping = False
         self.sleep_time = 0
         
@@ -174,6 +179,8 @@ class Sensor:
         return 1
         
     def colect_data(self) -> bool: # if colected data return True, else False
+        if not self.is_active():
+            return False
         if self.is_sleeping:
             self.sleep_time -= 1
             if self.sleep_time <= 0:
@@ -192,7 +199,7 @@ class Sensor:
         return True
         
     def send_data(self, data: Data) -> bool:
-        if not self.routing_table:
+        if not self.routing_table or not self.is_active():
             return False
 
         # Wybierz sąsiada najbliższego do głównej jednostki (GPSR)
@@ -208,7 +215,7 @@ class Sensor:
         return False
     
     def is_active(self) -> bool:
-        if self.energy <= 0 or self.is_sleeping:
+        if self.energy <= TRANSMISSION_COST or self.is_sleeping:
             return False
         return True
         
@@ -228,7 +235,14 @@ class main_unit(Sensor):
         else:
             self.send_data(data)   
             
-   
+    def reset(self): 
+        self.energy = BATTERY_CAPACITY
+        self.data_to_transfer  = []
+        self.recived_data = []
+        self.is_sleeping = False
+        self.sleep_time = 0
+        self.communicates = []
+        self.colect_data_by_network = []
 
 
 def distance_between_2_sensors(sensor1: Sensor, sensor2: Sensor):
@@ -264,22 +278,22 @@ class SensorNetwork:
         # 1. Akcja agenta (jeśli jest przekazana)
         if action is not None:
             # Przykład: agent wybiera, który sensor ma zbierać dane
-            selected_sensor = self.sensors[action]
-            selected_sensor.go_to_sleep(15)  # Reset sleep time
-            if selected_sensor.is_active:
-                if selected_sensor.colect_data():
-                    reward += 1  # Nagroda za udane zebranie danych
-                    reward -= 0.1  # Kara za zużycie energii
+            if not action >= self.num_sensors:
+                selected_sensor = self.sensors[action+1]  # +1 because main unit is at index 0
+                selected_sensor.go_to_sleep(15)  # set sleep time
+
 
         # 2. Symulacja działania sieci
         for sensor in self.sensors[1:]:
-            if sensor.is_active:
-                sensor.colect_data()
+            if sensor.is_active():
+                if sensor.colect_data():
+                    reward += 1  # Nagroda za udane zebranie danych
+                    reward -= 0.1  # Kara za zużycie energii
 
         # 3. Obliczanie nagrody
         # Przykładowe składowe nagrody:
         # - Nagroda za dane dostarczone do głównej jednostki
-        reward += len(self.sensors[0].colect_data_by_network) * 0.5
+        reward += len(self.sensors[0].colect_data_by_network) 
 
         # - Kara za zużycie energii
         for sensor in self.sensors:
@@ -313,7 +327,7 @@ class SensorNetwork:
             
     def is_active(self):
         """Checks if at least one sensor still has enough energy to operate."""
-        for sensor in self.sensors: 
+        for sensor in self.sensors[1:]: 
             if sensor.is_active():
                 return True
         return False
@@ -321,8 +335,9 @@ class SensorNetwork:
     def reset(self):
         for sensor in self.sensors:
             sensor.reset()      
+        observation = self.get_observation()
+        return observation
 
-
           
           
           
@@ -330,27 +345,6 @@ class SensorNetwork:
           
           
           
-
-# Initialize the network
-network = SensorNetwork(NETWORK_AREA)
-energy_over_time = []
-data_over_time = []
-
-# Sensor network simulation
-for t in range(DURATION):
-    # if not network.is_active():
-    #     break  # Stop simulation when all sensors are depleted
-    print(network.step())
-    print(len(network.get_observation()))
-    print(3*NUM_NODES + 2) # Expected observation size: energy of each sensor + data collected + positions + active sensors
-    # energy_over_time.append(network.energy_levels.copy())
-    # data_over_time.append(network.data_collected.copy())
-
-# Convert recorded data to NumPy arrays
-# energy_over_time = np.array(energy_over_time)
-# data_over_time = np.array(data_over_time)
-
-print(len(network.sensors[0].colect_data_by_network))
 
 
 

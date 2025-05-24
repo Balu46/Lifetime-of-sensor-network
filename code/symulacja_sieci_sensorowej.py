@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import torch as T
 import torch.nn as nn
 import torch.optim as optim
-
+import os
 
 # Parameters of the sensor network
 NUM_OF_MAIN_UNITS = 1
@@ -18,7 +18,7 @@ BATTERY_CAPACITY = 100  # Maximum energy capacity (in units)
 TRANSMISSION_COST = 5  # Energy cost per data transmission
 MINING_COST = 1
 
-DURATION = 10  # Number of simulation steps
+DURATION = 100  # Number of simulation steps, duration of 1 game
 
 NETWORK_AREA = (100, 100)  # Network area size (units)
 
@@ -63,12 +63,25 @@ class Agent():
         self.batch_size = batch_size
         self.mem_cntr = 0
 
+        self.path = '/home/jan/Informatyka/Projekt_indywidualny/code/models/best_model.pth'
+
         self.Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
                                  input_dims=input_dims, 
                                  fc1_dims=256, fc2_dims=256)
+        
+        self.best_Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
+                                 input_dims=input_dims, 
+                                 fc1_dims=256, fc2_dims=256)
 
-        self.state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
-        self.new_state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
+
+        if os.path.exists(self.path):
+            self.Q_eval.load_state_dict(T.load(self.path))
+            print(f"Model załadowany z pliku: {self.path}")
+        else:
+            print("Brak zapisanego modelu – uruchamianie od zera.")
+
+        self.state_memory = np.zeros((self.mem_size, input_dims), dtype=np.float32)
+        self.new_state_memory = np.zeros((self.mem_size, input_dims), dtype=np.float32)
         self.action_memory = np.zeros(self.mem_size, dtype=np.int32)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
@@ -119,7 +132,12 @@ class Agent():
 
         self.epsilon = self.epsilon - self.eps_dec if self.epsilon > self.eps_min \
                       else self.eps_min
-
+                      
+    def update_best_model(self):
+        self.best_Q_eval.load_state_dict(self.Q_eval.state_dict())
+        
+    def save_best_model(self, filename):
+        T.save(self.best_Q_eval.state_dict(), filename)
 
 class Data:
     def __init__(self):
@@ -152,7 +170,7 @@ class Sensor:
         self.recived_data = []
         self.routing_table = []
         
-        self.is_active = True
+        self.is_sleeping = False
         self.sleep_time = 0
         
         self.id = id
@@ -162,8 +180,7 @@ class Sensor:
         self.energy = BATTERY_CAPACITY
         self.data_to_transfer  = []
         self.recived_data = []
-        self.routing_table = []
-        self.is_active = True
+        self.is_sleeping = False
         self.sleep_time = 0
         
     def recive_data(self, data: Data) -> int:
@@ -173,7 +190,14 @@ class Sensor:
             self.send_data(data)
         return 1
         
-    def colect_data(self) -> bool:
+    def colect_data(self) -> bool: # if colected data return True, else False
+        if not self.is_active():
+            return False
+        if self.is_sleeping:
+            self.sleep_time -= 1
+            if self.sleep_time <= 0:
+                self.is_sleeping = False
+            return False
         self.energy -= MINING_COST
         mined = Data()
         mined.create_mined_data(id, 0) # 0 is always id of main unit
@@ -182,12 +206,12 @@ class Sensor:
         return False
         
     def go_to_sleep(self,time: int) -> bool:
-        self.is_active = False
+        self.is_sleeping = True
         self.sleep_time = time
         return True
         
     def send_data(self, data: Data) -> bool:
-        if not self.routing_table:
+        if not self.routing_table or not self.is_active():
             return False
 
         # Wybierz sąsiada najbliższego do głównej jednostki (GPSR)
@@ -203,8 +227,7 @@ class Sensor:
         return False
     
     def is_active(self) -> bool:
-        if self.energy <= 0:
-            self.is_active = False
+        if self.energy <= TRANSMISSION_COST:
             return False
         return True
         
@@ -215,7 +238,7 @@ class main_unit(Sensor):
         self.communicates = []
         self.colect_data_by_network = []
         self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1)) 
-        self.agent = Agent(gamma=0.99, epsilon=1, batch_size=64, n_actions=NUM_OF_SENSORS_IN_NETWORK, eps_end=0.01, input_dims=8,   lr = 0.003  )
+        self.agent = Agent(gamma=0.99, epsilon=1, batch_size=64, n_actions=NUM_OF_SENSORS_IN_NETWORK + 1, eps_end=0.01, input_dims=3*NUM_NODES + 2,   lr = 0.003)
         
         
     def recive_data(self, data: Data) -> bool:
@@ -224,7 +247,14 @@ class main_unit(Sensor):
         else:
             self.send_data(data)   
             
-   
+    def reset(self): 
+        self.energy = BATTERY_CAPACITY
+        self.data_to_transfer  = []
+        self.recived_data = []
+        self.is_sleeping = False
+        self.sleep_time = 0
+        self.communicates = []
+        self.colect_data_by_network = []
 
 
 def distance_between_2_sensors(sensor1: Sensor, sensor2: Sensor):
@@ -251,174 +281,82 @@ class SensorNetwork:
                         sensor.routing_table.append(sensor_2)   
                         
       
-        
     
-    
-    def step(self):
-        """Each sensor collects data and sends it to the main unit."""
-        for i in range(1,self.num_sensors+1):
-            self.sensors[i].colect_data()
+    def step(self, action=None):
+        """Wykonuje krok symulacji i zwraca: observation, reward, done, info."""
+        reward = 0
+        done = False
+
+        # 1. Akcja agenta (jeśli jest przekazana)
+        if action is not None:
+            # Przykład: agent wybiera, który sensor ma zbierać dane
+            if not action >= self.num_sensors:
+                selected_sensor = self.sensors[action+1]  # +1 because main unit is at index 0
+                selected_sensor.go_to_sleep(15)  # set sleep time
+
+
+        # 2. Symulacja działania sieci
+        for sensor in self.sensors[1:]:
+            if sensor.is_active():
+                if sensor.colect_data():
+                    reward += 1  # Nagroda za udane zebranie danych
+                    reward -= 0.1  # Kara za zużycie energii
+
+        # 3. Obliczanie nagrody
+        # Przykładowe składowe nagrody:
+        # - Nagroda za dane dostarczone do głównej jednostki
+        reward += len(self.sensors[0].colect_data_by_network) 
+
+        # - Kara za zużycie energii
+        for sensor in self.sensors:
+            if sensor.energy <= 0:
+                reward -= 10
+
+        # 4. Sprawdzenie warunków zakończenia
+        if not self.is_active():
+            done = True
+
+        # 5. Przygotowanie obserwacji (stanu)
+        observation = self.get_observation()
+
+        return observation, reward, done, {}
+
+    def get_observation(self):
+        """Zwraca stan środowiska jako wektor numeryczny."""
+        # Przykład: energia każdego sensora + liczba danych w głównej jednostce
+        observation = []
+        for sensor in self.sensors:
+            observation.append(sensor.energy / BATTERY_CAPACITY)  # Normalizacja
+        observation.append(len(self.sensors[0].colect_data_by_network))
+        for sensor in self.sensors:
+            observation.append(sensor.position[0][0] / self.area_size[0])
+            observation.append(sensor.position[0][1] / self.area_size[1])
+        # Dodajemy inne istotne informacje, np. liczba aktywnych sensorów
+        active_sensors = sum(1 for sensor in self.sensors if sensor.is_active)
+        observation.append(active_sensors / self.num_sensors)  # Normalizacja liczby aktywnych sensorów     
+        return np.array(observation, dtype=np.float32)
             
             
     def is_active(self):
         """Checks if at least one sensor still has enough energy to operate."""
-        for sensor in self.sensors: 
+        for sensor in self.sensors[1:]: 
             if sensor.is_active():
                 return True
         return False
-
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
-
-# Initialize the network
-network = SensorNetwork(NETWORK_AREA)
-energy_over_time = []
-data_over_time = []
-
-# Sensor network simulation
-for t in range(DURATION):
-    # if not network.is_active():
-    #     break  # Stop simulation when all sensors are depleted
-    network.step()
-    # energy_over_time.append(network.energy_levels.copy())
-    # data_over_time.append(network.data_collected.copy())
-
-# Convert recorded data to NumPy arrays
-# energy_over_time = np.array(energy_over_time)
-# data_over_time = np.array(data_over_time)
-
-print(len(network.sensors[0].colect_data_by_network))
-
-
-# # Wizualizacja
-# plt.figure(figsize=(12, 10))
-
-# # Plot main unit
-# main_unit = network.sensors[0]
-# plt.scatter(
-#     main_unit.position[0][0],
-#     main_unit.position[0][1],
-#     c='red',
-#     s=100,
-#     label='Main Unit (red)'
-# )
-
-# # Plot main unit's transfer coverage
-# main_unit_circle = plt.Circle(
-#     (main_unit.position[0][0], main_unit.position[0][1]),
-#     main_unit.transfer_coverage_distance,
-#     color='red',
-#     alpha=0.1,
-#     label='Main Unit Transfer Range'
-# )
-# plt.gca().add_patch(main_unit_circle)
-
-# # Plot sensors and their connections
-# for s in network.sensors[1:]:
-#     # Sensor point
-#     plt.scatter(
-#         s.position[0][0],
-#         s.position[0][1],
-#         c='blue',
-#         s=50
-#     )
     
-#     # Coverage radius
-#     coverage_circle = plt.Circle(
-#         (s.position[0][0], s.position[0][1]),
-#         s.coverage_radius,
-#         color='blue',
-#         alpha=0.1,
-#         fill=False,
-#         linestyle='--',
-#         label='Sensor Coverage' if s.id == 1 else ""
-#     )
-#     plt.gca().add_patch(coverage_circle)
-    
-#     # Transfer radius
-#     transfer_circle = plt.Circle(
-#         (s.position[0][0], s.position[0][1]),
-#         s.transfer_coverage_distance,
-#         color='green',
-#         alpha=0.05,
-#         label='Sensor Transfer Range' if s.id == 1 else ""
-#     )
-#     plt.gca().add_patch(transfer_circle)
-    
-#     # Draw connections to neighbors in routing table
-#     for neighbor in s.routing_table:
-#         plt.plot(
-#             [s.position[0][0], neighbor.position[0][0]],
-#             [s.position[0][1], neighbor.position[0][1]],
-#             'gray',
-#             alpha=0.3,
-#             linewidth=0.5
-#         )
+    def reset(self):
+        for sensor in self.sensors:
+            sensor.reset()      
+        observation = self.get_observation()
+        return observation
 
-# # Simulate and plot data flow paths
-# for data_packet in network.sensors[0].colect_data_by_network:
-#     path = []
-#     current_sensor_id = data_packet.device
-#     path.append(network.sensors[current_sensor_id])
-    
-#     # Trace back the path (simplified - would need actual routing info)
-#     while current_sensor_id != 0:
-#         if not network.sensors[current_sensor_id].routing_table:
-#             break
-#         next_hop = min(
-#             network.sensors[current_sensor_id].routing_table,
-#             key=lambda neighbor: np.linalg.norm(neighbor.position - main_unit.position)
-#         )
-#         path.append(next_hop)
-#         current_sensor_id = next_hop.id
-    
-#     # Draw the path
-#     for i in range(len(path)-1):
-#         plt.plot(
-#             [path[i].position[0][0], path[i+1].position[0][0]],
-#             [path[i].position[0][1], path[i+1].position[0][1]],
-#             'r-',
-#             alpha=0.5,
-#             linewidth=1.5
-#         )
-#         # Add arrow
-#         plt.arrow(
-#             path[i].position[0][0], path[i].position[0][1],
-#             (path[i+1].position[0][0] - path[i].position[0][0])*0.9,
-#             (path[i+1].position[0][1] - path[i].position[0][1])*0.9,
-#             head_width=2,
-#             head_length=3,
-#             fc='red',
-#             ec='red',
-#             alpha=0.5
-#         )
+          
+          
+          
+          
+          
+          
+          
 
-# # Create custom legend
-# legend_elements = [
-#     plt.Line2D([0], [0], marker='o', color='w', label='Main Unit', markerfacecolor='red', markersize=10),
-#     plt.Line2D([0], [0], marker='o', color='w', label='Sensors', markerfacecolor='blue', markersize=10),
-#     plt.Line2D([0], [0], color='red', alpha=0.3, label='Main Unit Range', linewidth=10),
-#     plt.Line2D([0], [0], color='blue', alpha=0.3, label='Sensor Coverage', linestyle='--', linewidth=2),
-#     plt.Line2D([0], [0], color='green', alpha=0.3, label='Sensor Transfer', linewidth=10),
-#     plt.Line2D([0], [0], color='red', alpha=0.5, label='Data Flow', linewidth=1.5),
-#     plt.Line2D([0], [0], color='gray', alpha=0.3, label='Possible Connections', linewidth=0.5)
-# ]
 
-# plt.legend(handles=legend_elements, loc='upper right')
-# plt.title("Sensor Network with Coverage and Data Flow")
-# plt.xlabel("X Coordinate")
-# plt.ylabel("Y Coordinate")
-# plt.grid(True, alpha=0.3)
-# plt.xlim(0, NETWORK_AREA[0])
-# plt.ylim(0, NETWORK_AREA[1])
-# plt.tight_layout()
-# plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/sensor_network_with_flow.png")
+

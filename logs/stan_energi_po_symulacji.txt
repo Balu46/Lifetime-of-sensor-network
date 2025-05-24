@@ -1,0 +1,150 @@
+Game 0:
+Time used: 179
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 3, 2, 4, 4]
+
+
+Game 1:
+Time used: 138
+Dane zebrane przez główną jednostkę: 115
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 5, 1, 4, 4]
+
+
+Game 2:
+Time used: 137
+Dane zebrane przez główną jednostkę: 115
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 3, 3, 4, 4]
+
+
+Game 3:
+Time used: 211
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 3, 2, 4, 4]
+
+
+Game 4:
+Time used: 207
+Dane zebrane przez główną jednostkę: 115
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 3, 1, 4, 4]
+
+
+Game 5:
+Time used: 162
+Dane zebrane przez główną jednostkę: 115
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 1, 4, 4, 4]
+
+
+Game 6:
+Time used: 137
+Dane zebrane przez główną jednostkę: 115
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 7:
+Time used: 98
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 5, 4, 4]
+
+
+Game 8:
+Time used: 159
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+
+
+Game 9:
+Time used: 241
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 5, 5, 4, 4]
+
+
+Game 10:
+Time used: 1699
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 11:
+Time used: 1391
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 5, 1, 4, 4]
+
+
+Game 12:
+Time used: 2009
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 13:
+Time used: 1499
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 14:
+Time used: 220
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 15:
+Time used: 154
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 16:
+Time used: 795
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 5, 1, 4, 4]
+
+
+Game 17:
+Time used: 499
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 18:
+Time used: 387
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 19:
+Time used: 227
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 5, 1, 4, 4]
+
+
+Game 20:
+Time used: 1557
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 21:
+Time used: 1558
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 22:
+Time used: 1790
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 23:
+Time used: 801
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
+Game 24:
+Time used: 267
+Dane zebrane przez główną jednostkę: 114
+Energia pozostała w sensorach: [4, 4, 4, 4, 4, 4, 4, 1, 4, 4]
+
+
