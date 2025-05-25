@@ -299,17 +299,15 @@ class SensorNetwork:
         for sensor in self.sensors[1:]:
             if sensor.is_active():
                 if sensor.colect_data():
-                    reward += 1  # Nagroda za udane zebranie danych
-                    reward -= 0.1  # Kara za zużycie energii
+                    reward -= 1  # Kara za zużycie energii
 
-        # 3. Obliczanie nagrody
-        # Przykładowe składowe nagrody:
-        # - Nagroda za dane dostarczone do głównej jednostki
-        reward += len(self.sensors[0].colect_data_by_network) 
+
+        # Nagroda za dane dostarczone do głównej jednostki
+        reward += len(self.sensors[0].colect_data_by_network) * 2
 
         # - Kara za zużycie energii
         for sensor in self.sensors:
-            if sensor.energy <= 0:
+            if sensor.energy <= TRANSMISSION_COST or sensor.energy <= MINING_COST:
                 reward -= 10
 
         # 4. Sprawdzenie warunków zakończenia

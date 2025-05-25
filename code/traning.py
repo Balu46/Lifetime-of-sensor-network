@@ -10,7 +10,7 @@ import torch.optim as optim
 import symulacja_sieci_sensorowej as sym
 from utils import plot_learning_curve
 
-N_GAMES = 500
+N_GAMES = 100
 
 
 def traning():
@@ -83,7 +83,7 @@ traning()
    
    
     
-x = [i+1 for i in range(N_GAMES)]
+# x = [i+1 for i in range(N_GAMES)]
 # filename = 'wyuczenie _sieci.png'
 # plot_learning_curve(x, scores, eps_history, filename)
 

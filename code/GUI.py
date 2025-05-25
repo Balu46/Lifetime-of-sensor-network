@@ -6,7 +6,7 @@ from PIL import Image, ImageTk, ImageDraw
 import time
 from symulacja_sieci_sensorowej import SensorNetwork, Sensor, NETWORK_AREA, BATTERY_CAPACITY, DURATION
 from typing import List
-from traning import traning
+# from traning import traning
 
 class SensorNetworkGUI(tk.Tk):
     def __init__(self, network):
