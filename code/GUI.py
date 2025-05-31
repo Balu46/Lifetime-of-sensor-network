@@ -1,222 +1,298 @@
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk, ImageDraw
+from symulacja_sieci_sensorowej import SensorNetwork, Sensor, symulation
+from typing import List
 import numpy as np
 import math
-from PIL import Image, ImageTk, ImageDraw
 import time
-from symulacja_sieci_sensorowej import SensorNetwork, Sensor, NETWORK_AREA, BATTERY_CAPACITY, DURATION
-from typing import List
-# from traning import traning
+import tkinter as tk
+from tkinter import ttk
+import numpy as np
+import time
+import threading
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+from Hyperparamiters import *
+import json
 
-class SensorNetworkGUI(tk.Tk):
-    def __init__(self, network):
-        super().__init__()
-        self.network = network
-        self.title("Sensor Network Simulation")
-        self.geometry("1000x800")
+import json
+import tkinter as tk
+from tkinter import ttk, messagebox
+import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+
+class SensorNetworkVisualizer:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Sensor Network Simulation Visualizer")
+        
+        # Simulation data
+        self.simulation_data = []
         self.current_step = 0
-        self.is_running = False
-        self.speed = 1.0
+        self.is_playing = False
+        self.playback_speed = 500  # ms
+        
+        # Colors for visualization
+        self.COLORS = {
+            'main_unit': 'red',
+            'active': 'blue',
+            'sleeping': 'purple',
+            'inactive': 'gray'
+        }
+        
+        # Setup UI
         self.setup_ui()
         
+        # Load simulation data automatically
+        self.load_simulation_data()
+        
     def setup_ui(self):
-        self.main_frame = ttk.Frame(self)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # Main frames
+        self.control_frame = ttk.Frame(self.master, padding=10)
+        self.control_frame.pack(side=tk.LEFT, fill=tk.Y)
         
-        self.canvas_frame = ttk.Frame(self.main_frame)
-        self.canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.visualization_frame = ttk.Frame(self.master, padding=10)
+        self.visualization_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
         
-        self.canvas = tk.Canvas(self.canvas_frame, bg='white')
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        # Visualization canvas
+        self.canvas = tk.Canvas(self.visualization_frame, bg='white', 
+                               width=NETWORK_AREA[0]*5, height=NETWORK_AREA[1]*5)
+        self.canvas.pack(expand=True, fill=tk.BOTH)
         
-        self.control_frame = ttk.Frame(self.main_frame)
-        self.control_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
+        # Control buttons
+        self.setup_controls()
         
-        self.start_button = ttk.Button(self.control_frame, text="Start", command=self.start_simulation)
-        self.start_button.pack(side=tk.LEFT, padx=5)
+        # Stats display
+        self.setup_stats()
         
-        self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_simulation)
-        self.pause_button.pack(side=tk.LEFT, padx=5)
+        # Energy plot
+        self.setup_energy_plot()
         
-        self.reset_button = ttk.Button(self.control_frame, text="Reset", command=self.reset_simulation)
-        self.reset_button.pack(side=tk.LEFT, padx=5)
+        # Legend
+        self.setup_legend()
+    
+    def setup_controls(self):
+        control_group = ttk.LabelFrame(self.control_frame, text="Playback Controls", padding=10)
+        control_group.pack(fill=tk.X, pady=5)
         
-        self.speed_label = ttk.Label(self.control_frame, text="Speed:")
-        self.speed_label.pack(side=tk.LEFT, padx=5)
+        # Button grid
+        button_frame = ttk.Frame(control_group)
+        button_frame.pack()
         
-        self.speed_slider = ttk.Scale(self.control_frame, from_=0.1, to=5.0, value=1.0, 
-                                    command=self.update_speed)
-        self.speed_slider.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        self.play_button = ttk.Button(button_frame, text="▶", width=3, 
+                                    command=self.start_playback)
+        self.play_button.grid(row=0, column=1, padx=2)
         
-        self.info_frame = ttk.LabelFrame(self.control_frame, text="Simulation Info")
-        self.info_frame.pack(side=tk.RIGHT, padx=5)
+        self.pause_button = ttk.Button(button_frame, text="⏸", width=3, 
+                                     command=self.pause_playback, state=tk.DISABLED)
+        self.pause_button.grid(row=0, column=2, padx=2)
         
-        self.step_label = ttk.Label(self.info_frame, text="Step: 0/0")
-        self.step_label.pack(side=tk.LEFT, padx=5)
+        self.step_back_button = ttk.Button(button_frame, text="⏮", width=3,
+                                         command=self.step_backward)
+        self.step_back_button.grid(row=0, column=0, padx=2)
         
-        self.data_label = ttk.Label(self.info_frame, text="Data collected: 0")
-        self.data_label.pack(side=tk.LEFT, padx=5)
+        self.step_forward_button = ttk.Button(button_frame, text="⏭", width=3,
+                                            command=self.step_forward)
+        self.step_forward_button.grid(row=0, column=3, padx=2)
         
-        self.energy_label = ttk.Label(self.info_frame, text="Avg energy: 100%")
-        self.energy_label.pack(side=tk.LEFT, padx=5)
+        # Speed control
+        speed_frame = ttk.Frame(control_group)
+        speed_frame.pack(fill=tk.X, pady=5)
         
-        self.init_visualization()
+        ttk.Label(speed_frame, text="Speed:").pack(side=tk.LEFT)
+        self.speed_slider = ttk.Scale(speed_frame, from_=100, to=2000, 
+                                     command=self.update_speed, orient=tk.HORIZONTAL)
+        self.speed_slider.set(self.playback_speed)
+        self.speed_slider.pack(fill=tk.X)
         
-    def init_visualization(self):
-        self.img_width = 800
-        self.img_height = 600
-        self.scale_x = self.img_width / NETWORK_AREA[0]
-        self.scale_y = self.img_height / NETWORK_AREA[1]
+        # Load button
+        ttk.Button(self.control_frame, text="Reload Simulation", 
+                  command=self.load_simulation_data).pack(fill=tk.X, pady=5)
+    
+    def setup_stats(self):
+        stats_group = ttk.LabelFrame(self.control_frame, text="Statistics", padding=10)
+        stats_group.pack(fill=tk.X, pady=5)
         
-        # Utwórz obraz z przezroczystością
-        self.base_image = Image.new("RGBA", (self.img_width, self.img_height), (255, 255, 255, 255))
-        self.draw = ImageDraw.Draw(self.base_image)
+        self.step_label = ttk.Label(stats_group, text="Step: 0/0")
+        self.step_label.pack(anchor=tk.W)
         
-        # Narysuj główną jednostkę
-        main_unit = self.network.sensors[0]
-        x, y = self.scale_position(main_unit.position[0])
-        self.draw_main_unit(x, y, main_unit.transfer_coverage_distance * self.scale_x)
+        self.data_label = ttk.Label(stats_group, text="Data collected: 0")
+        self.data_label.pack(anchor=tk.W)
         
-        # Narysuj sensory
-        for sensor in self.network.sensors[1:]:
-            x, y = self.scale_position(sensor.position[0])
-            self.draw_sensor(x, y, sensor.coverage_radius * self.scale_x, 
-                           sensor.transfer_coverage_distance * self.scale_x, 
-                           sensor.energy / BATTERY_CAPACITY)
+        self.energy_label = ttk.Label(stats_group, text="Avg energy: 0%")
+        self.energy_label.pack(anchor=tk.W)
         
-        self.update_canvas()
+        self.status_label = ttk.Label(stats_group, text="Status: Ready")
+        self.status_label.pack(anchor=tk.W)
+    
+    def setup_energy_plot(self):
+        self.energy_fig, self.energy_ax = plt.subplots(figsize=(4, 2), dpi=80)
+        self.energy_ax.set_title("Sensor Energy Levels")
+        self.energy_ax.set_ylim(0, BATTERY_CAPACITY)
         
-    def scale_position(self, pos):
-        return pos[0] * self.scale_x, pos[1] * self.scale_y
+        self.energy_canvas = FigureCanvasTkAgg(self.energy_fig, master=self.control_frame)
+        self.energy_canvas.draw()
+        self.energy_canvas.get_tk_widget().pack(fill=tk.X, pady=10)
+    
+    def setup_legend(self):
+        legend_frame = ttk.Frame(self.visualization_frame)
+        legend_frame.pack(fill=tk.X)
         
-    def draw_main_unit(self, x, y, radius):
-        # Utwórz osobny obraz dla przezroczystych elementów
-        overlay = Image.new("RGBA", (self.img_width, self.img_height), (0, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
+        ttk.Label(legend_frame, text="Legend:").pack(side=tk.LEFT)
         
-        # Zakres transferu (czerwony z przezroczystością)
-        overlay_draw.ellipse([x-radius, y-radius, x+radius, y+radius], 
-                           fill=(255, 0, 0, 30), outline=(255, 0, 0, 150))
-        
-        # Połącz warstwy
-        self.base_image = Image.alpha_composite(self.base_image, overlay)
-        self.draw = ImageDraw.Draw(self.base_image)
-        
-        # Ikona głównej jednostki (bez przezroczystości)
-        size = 20
-        self.draw.rectangle([x-size/2, y-size/2, x+size/2, y+size/2], 
-                          fill="red", outline="black")
-        
-    def draw_sensor(self, x, y, coverage_radius, transfer_radius, energy_level):
-        # Utwórz osobny obraz dla przezroczystych elementów
-        overlay = Image.new("RGBA", (self.img_width, self.img_height), (0, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
-        
-        # Zakres transferu (zielony z przezroczystością)
-        overlay_draw.ellipse([x-transfer_radius, y-transfer_radius, 
-                            x+transfer_radius, y+transfer_radius], 
-                           fill=(0, 255, 0, 25), outline=(0, 255, 0, 100))
-        
-        # Zakres pokrycia (niebieski z przezroczystością)
-        overlay_draw.ellipse([x-coverage_radius, y-coverage_radius, 
-                            x+coverage_radius, y+coverage_radius], 
-                           fill=(0, 0, 255, 30), outline=(0, 0, 255, 150))
-        
-        # Połącz warstwy
-        self.base_image = Image.alpha_composite(self.base_image, overlay)
-        self.draw = ImageDraw.Draw(self.base_image)
-        
-        # Ikona sensora (kolor zależny od energii)
-        r, g = 255, int(255 * energy_level)
-        color = f'#{r:02x}{g:02x}00'
-        size = 15
-        self.draw.ellipse([x-size/2, y-size/2, x+size/2, y+size/2], 
-                         fill=color, outline="black")
-        
-    def update_canvas(self):
-        # Konwertuj RGBA do RGB (Tkinter nie obsługuje przezroczystości bezpośrednio)
-        rgb_image = self.base_image.convert("RGB")
-        self.tk_image = ImageTk.PhotoImage(rgb_image)
-        
-        self.canvas.delete("all")
-        self.canvas.create_image(0, 0, image=self.tk_image, anchor=tk.NW)
-        
-    def update_info(self):
-        active_sensors = sum(1 for s in self.network.sensors if s.is_active)
-        energy_levels = [s.energy for s in self.network.sensors]
-        
-        self.step_label.config(text=f"Step: {self.current_step}/{DURATION}")
-        self.data_label.config(text=f"Data collected: {len(self.network.sensors[0].colect_data_by_network)}")
-        self.energy_label.config(text=f"Avg energy: {np.mean(energy_levels)/BATTERY_CAPACITY*100:.1f}%")
-        
-    def start_simulation(self):
-        if not self.is_running:
-            self.is_running = True
-            self.run_simulation()
+        for state, color in self.COLORS.items():
+            tk.Canvas(legend_frame, width=20, height=20, bg=color).pack(side=tk.LEFT, padx=2)
+            ttk.Label(legend_frame, text=state).pack(side=tk.LEFT)
+    
+    def load_simulation_data(self, filename="simulation_data.json"):
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
             
-    def pause_simulation(self):
-        self.is_running = False
-        
-    def reset_simulation(self):
-        self.is_running = False
-        self.current_step = 0
-        self.network = SensorNetwork(NETWORK_AREA)
-        self.init_visualization()
-        self.update_info()
-        
-    def update_speed(self, value):
-        self.speed = float(value)
-        
-    def run_simulation(self):
-        if self.current_step >= DURATION or not self.is_running:
-            self.is_running = False
+            self.simulation_data = data["simulation_data"]
+            self.current_step = 0
+            self.update_visualization()
+            self.update_stats()
+            
+            self.status_label.config(text=f"Status: Loaded {len(self.simulation_data)} steps")
+            messagebox.showinfo("Success", f"Successfully loaded simulation with {len(self.simulation_data)} steps")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load simulation: {str(e)}")
+            self.status_label.config(text="Status: Load failed")
+    
+    def update_visualization(self):
+        if not self.simulation_data or self.current_step >= len(self.simulation_data):
             return
             
+        self.canvas.delete("all")
+        step_data = self.simulation_data[self.current_step]
         
-        observation, reward, done, _ = self.network.step()
-        self.current_step += 1
+        # Draw main unit
+        main = step_data["main_unit"]
+        x, y = int(main["position"][0][0]*5), int(main["position"][0][1]*5)
+        self.canvas.create_oval(x-10, y-10, x+10, y+10, 
+                              fill=self.COLORS['main_unit'], outline='black')
+        self.canvas.create_text(x, y-15, text="Main Unit", font=('Arial', 8))
         
-        self.init_visualization()
+        # Draw coverage area
+        cov_radius = int(main["transfer_distance"]*5)
+        self.canvas.create_oval(x-cov_radius, y-cov_radius, 
+                               x+cov_radius, y+cov_radius, 
+                               outline='red', dash=(2,2))
         
-        for data_packet in self.network.sensors[0].colect_data_by_network:
-            path = self.trace_data_path(data_packet)
-            self.draw_data_flow(path)
-        
-        self.update_info()
-        
-        delay = int(1000 / self.speed)
-        self.after(delay, self.run_simulation)
-        
-    def draw_data_flow(self, path):
-        for arrow in self.data_arrows:
-            self.canvas.delete(arrow)
-        self.data_arrows = []
-        
-        for i in range(len(path)-1):
-            x1, y1 = self.scale_position(path[i].position[0])
-            x2, y2 = self.scale_position(path[i+1].position[0])
+        # Draw sensors
+        for sensor in step_data["sensors"]:
+            x, y = int(sensor["position"][0][0]*5), int(sensor["position"][0][1]*5)
             
-            arrow = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, 
-                                          fill="red", width=2, arrowshape=(8,10,5))
-            self.data_arrows.append(arrow)
+            # Determine color based on state
+            if sensor["is_sleeping"]:
+                color = self.COLORS['sleeping']
+            elif sensor["energy"] > TRANSMISSION_COST:
+                color = self.COLORS['active']
+            else:
+                color = self.COLORS['inactive']
+            
+            # Draw sensor
+            self.canvas.create_oval(x-8, y-8, x+8, y+8, fill=color, outline='black')
+            self.canvas.create_text(x, y-12, text=f"S{sensor['id']}", font=('Arial', 7))
+            
+            # Draw coverage area if active
+            if color == self.COLORS['active']:
+                cov_radius = int(sensor["coverage_radius"]*5)
+                self.canvas.create_oval(x-cov_radius, y-cov_radius, 
+                                       x+cov_radius, y+cov_radius, 
+                                       outline='blue')
+            
+            # Draw connections
+            for neighbor in step_data["sensors"]:
+                if neighbor["id"] > sensor["id"]:
+                    x2, y2 = int(neighbor["position"][0][0]*5), int(neighbor["position"][0][1]*5)
+                    dash = (3,2) if sensor["is_sleeping"] or neighbor["is_sleeping"] else (1,1)
+                    self.canvas.create_line(x, y, x2, y2, fill='light gray', dash=dash)
         
-    def trace_data_path(self, data_packet):
-        path = []
-        current_sensor_id = data_packet.device
-        path.append(self.network.sensors[current_sensor_id])
+        # Update energy plot
+        self.update_energy_plot(step_data)
+    
+    def update_energy_plot(self, step_data):
+        self.energy_ax.clear()
         
-        while current_sensor_id != 0:
-            if not self.network.sensors[current_sensor_id].routing_table:
-                break
-            next_hop = min(
-                self.network.sensors[current_sensor_id].routing_table,
-                key=lambda neighbor: np.linalg.norm(neighbor.position - self.network.sensors[0].position))
-            path.append(next_hop)
-            current_sensor_id = next_hop.id
+        energies = [s["energy"] for s in step_data["sensors"]]
+        sensor_ids = [f"S{s['id']}" for s in step_data["sensors"]]
         
-        return path
+        colors = []
+        for sensor in step_data["sensors"]:
+            if sensor["is_sleeping"]:
+                colors.append(self.COLORS['sleeping'])
+            elif sensor["energy"] > TRANSMISSION_COST:
+                colors.append(self.COLORS['active'])
+            else:
+                colors.append(self.COLORS['inactive'])
+        
+        self.energy_ax.bar(sensor_ids, energies, color=colors)
+        self.energy_ax.set_ylim(0, BATTERY_CAPACITY)
+        self.energy_ax.set_title(f"Energy Levels - Step {self.current_step}")
+        self.energy_canvas.draw()
+    
+    def update_stats(self):
+        if not self.simulation_data:
+            return
+            
+        step_data = self.simulation_data[self.current_step]
+        
+        # Update labels
+        self.step_label.config(text=f"Step: {self.current_step+1}/{len(self.simulation_data)}")
+        self.data_label.config(text=f"Data collected: {step_data['data_collected']}")
+        
+        # Calculate average energy
+        avg_energy = np.mean([s["energy"] for s in step_data["sensors"]])
+        self.energy_label.config(text=f"Avg energy: {avg_energy/BATTERY_CAPACITY:.1%}")
+    
+    def start_playback(self):
+        if not self.simulation_data:
+            return
+            
+        self.is_playing = True
+        self.play_button.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.NORMAL)
+        self.playback()
+    
+    def pause_playback(self):
+        self.is_playing = False
+        self.play_button.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+    
+    def playback(self):
+        if self.is_playing and self.current_step < len(self.simulation_data)-1:
+            self.current_step += 1
+            self.update_visualization()
+            self.update_stats()
+            self.master.after(self.playback_speed, self.playback)
+        else:
+            self.pause_playback()
+    
+    def step_forward(self):
+        if self.current_step < len(self.simulation_data)-1:
+            self.current_step += 1
+            self.update_visualization()
+            self.update_stats()
+    
+    def step_backward(self):
+        if self.current_step > 0:
+            self.current_step -= 1
+            self.update_visualization()
+            self.update_stats()
+    
+    def update_speed(self, value):
+        self.playback_speed = int(float(value))
 
+symulation_data = symulation()
+with open("simulation_data.json", "w") as f:
+    json.dump({"simulation_data": symulation_data}, f)
+# Initialize the main application window
 
-network = SensorNetwork(NETWORK_AREA)
-app = SensorNetworkGUI(network)
-app.mainloop()
+root = tk.Tk()
+app = SensorNetworkVisualizer(root)
+root.mainloop()

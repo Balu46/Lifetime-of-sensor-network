@@ -9,8 +9,9 @@ import torch.nn as nn
 import torch.optim as optim
 import symulacja_sieci_sensorowej as sym
 from utils import plot_learning_curve
+from Hyperparamiters import N_GAMES_FOR_TRANING
 
-N_GAMES = 100
+
 
 
 def traning():
@@ -25,7 +26,7 @@ def traning():
     energy_over_time = []
     data_over_time = []
     scores ,eps_history = [], []
-    n_games = N_GAMES
+    n_games = N_GAMES_FOR_TRANING
     best_score = 0
     
     path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji.txt"
@@ -74,6 +75,7 @@ def traning():
     network.sensors[0].agent.save_best_model('/home/jan/Informatyka/Projekt_indywidualny/code/models/best_model.pth')
     
     
+      
           
           
 

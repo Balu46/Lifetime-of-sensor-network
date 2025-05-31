@@ -8,24 +8,8 @@ import torch as T
 import torch.nn as nn
 import torch.optim as optim
 import os
-
-# Parameters of the sensor network
-NUM_OF_MAIN_UNITS = 1
-NUM_OF_SENSORS_IN_NETWORK = 10 # Number of sensor nodes
-
-BATTERY_CAPACITY = 100  # Maximum energy capacity (in units)
-
-TRANSMISSION_COST = 5  # Energy cost per data transmission
-MINING_COST = 1
-
-DURATION = 100  # Number of simulation steps, duration of 1 game
-
-NETWORK_AREA = (100, 100)  # Network area size (units)
-
-NUM_OF_DATA_IN_BACH = 10
-
-NUM_NODES = NUM_OF_MAIN_UNITS + NUM_OF_SENSORS_IN_NETWORK
-
+from Hyperparamiters import *
+import json
 
 class DeepQNetwork(nn.Module):
     def __init__(self, lr, input_dims, fc1_dims, fc2_dims, n_actions):
@@ -76,6 +60,7 @@ class Agent():
 
         if os.path.exists(self.path):
             self.Q_eval.load_state_dict(T.load(self.path))
+            self.best_Q_eval.to(self.Q_eval.device)
             print(f"Model załadowany z pliku: {self.path}")
         else:
             print("Brak zapisanego modelu – uruchamianie od zera.")
@@ -145,6 +130,7 @@ class Data:
         self.communique = ''
         self.device = -1 ,# from what device each data is
         self.destination = None #where data should go 
+        self.route =  [] # route of data, list of sensors that data passed through
         
     def create_mined_data(self,device, destination) -> None:
         self.data = 1
@@ -164,7 +150,7 @@ class Sensor:
         
         self.position = np.random.rand(1, 2) * self.area_size  # Random sensor positions
         self.coverage_radius = np.random.uniform(10, 20, 1)
-        self.transfer_coverage_distance = self.coverage_radius * 4
+        self.transfer_coverage_distance = self.coverage_radius * 3
         
         self.data_to_transfer  = []
         self.recived_data = []
@@ -201,6 +187,7 @@ class Sensor:
         self.energy -= MINING_COST
         mined = Data()
         mined.create_mined_data(id, 0) # 0 is always id of main unit
+        mined.route.append(self.id)  # Add current sensor to the route
         if self.send_data(mined):
             return True
         return False
@@ -221,8 +208,9 @@ class Sensor:
         )
         
         if best_neighbor.is_active:
-            best_neighbor.recive_data(data)
             self.energy -= TRANSMISSION_COST
+            data.route.append(best_neighbor.id)  # Add current sensor to the route
+            best_neighbor.recive_data(data)
             return True
         return False
     
@@ -244,6 +232,7 @@ class main_unit(Sensor):
     def recive_data(self, data: Data) -> bool:
         if data.destination == self.id:
             self.colect_data_by_network.append(data)
+            # print(f"Main unit received data from sensor {data.device}. Route: {data.route}")
         else:
             self.send_data(data)   
             
@@ -346,15 +335,111 @@ class SensorNetwork:
         for sensor in self.sensors:
             sensor.reset()      
         observation = self.get_observation()
-        return observation
+        return observation        
+          
+          
+          
+          
+def save_history_to_file(history, filename="simulation_history.json"):
+    with open(filename, 'w') as f:
+        json.dump({
+            "history": history
+        }, f, indent=2)
 
+def load_history_from_file(filename="simulation_history.json"):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    return data["history"]          
           
           
           
-          
-          
-          
-          
+def symulation() -> List[main_unit]:
+    """
+    Function to train the sensor network.
+    This function initializes the sensor network and runs a series of training episodes.
+    Each episode consists of a series of time steps where the sensors interact with the environment.
+    The training process involves choosing actions, receiving rewards, and updating the agent's knowledge.
+    """
+    # Initialize the network
+    network = SensorNetwork(NETWORK_AREA)
+    scores ,eps_history = [], []
+    
+    best_score = 0
+    
+    history = []    
+    
+    path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji.txt"
+    
+    # create a file to store the results
+    # This file will be used to log the energy state of the sensors after each game
+    with open(path_for_log_energy, "w") as f:
+        pass 
 
+    
+    # Sensor network simulation
+    t = 0 #time spent in symulation
+            
+    step = 0
+    score = 0
+    done = False
+    observation = network.reset()
+    while not done:
+        action = network.sensors[0].agent.choose_action(observation)
+        observation_, reward, done, info = network.step(action)
+        score += reward
+            
+        network.sensors[0].agent.store_transition(observation, action, reward,
+                            observation_, done)
+        network.sensors[0].agent.learn() 
+            
+        observation = observation_
+        t+=1
+        history.append({
+            "step": step,
+            "main_unit": {
+                "id": network.sensors[0].id,
+                "energy": network.sensors[0].energy,
+                "position": network.sensors[0].position.tolist(),
+                "collected_data": len(network.sensors[0].colect_data_by_network),
+                "transfer_distance": float(network.sensors[0].transfer_coverage_distance),
+                "is_sleeping": network.sensors[0].is_sleeping,
+                "coverage_radius": float(network.sensors[0].coverage_radius)
+            },
+            "sensors": [
+                {
+                    "id": sensor.id,
+                    "energy": sensor.energy,
+                    "position": sensor.position.tolist(),
+                    "is_sleeping": sensor.is_sleeping,
+                    "sleep_time": sensor.sleep_time,
+                    "coverage_radius": float(sensor.coverage_radius),
+                    "transfer_distance": float(sensor.transfer_coverage_distance)
+                }
+                for sensor in network.sensors[1:]   
+            ],
+            "reward": reward,
+            "data_collected": len(network.sensors[0].colect_data_by_network)
+        })
+        step += 1
+    
+    
+    scores.append(score)
+    eps_history.append(network.sensors[0].agent.epsilon)
 
+    avg_score = np.mean(scores[-100:])
+    if score > best_score:
+        best_score = score
+        network.sensors[0].agent.update_best_model()
+                
+        
+    with open(path_for_log_energy, "a") as file:
+        file.write(f"Game {1}:\n")
+        file.write(f"Time used: {t}\n")
+        file.write(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}\n")
+        file.write(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}\n\n\n")
+                
 
+    return history
+          
+          
+print("Starting simulation...")

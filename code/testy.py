@@ -1,350 +1,298 @@
+import tkinter as tk
+from tkinter import ttk
 import numpy as np
-import random
+import time
+import threading
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-from typing import List
-import math
-import torch.nn.functional as F
-import torch as T
-import torch.nn as nn
-import torch.optim as optim
 
-
-# Parameters of the sensor network
-NUM_OF_MAIN_UNITS = 1
-NUM_OF_SENSORS_IN_NETWORK = 10 # Number of sensor nodes
-
-BATTERY_CAPACITY = 100  # Maximum energy capacity (in units)
-
-TRANSMISSION_COST = 5  # Energy cost per data transmission
-MINING_COST = 1
-
-DURATION = 10  # Number of simulation steps, duration of 1 game
-
-NETWORK_AREA = (100, 100)  # Network area size (units)
-
-NUM_OF_DATA_IN_BACH = 10
-
-NUM_NODES = NUM_OF_MAIN_UNITS + NUM_OF_SENSORS_IN_NETWORK
-
-
-class DeepQNetwork(nn.Module):
-    def __init__(self, lr, input_dims, fc1_dims, fc2_dims, n_actions):
-        super(DeepQNetwork, self).__init__()
-        self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
-        self.n_actions = n_actions
+class SensorNetworkGUI:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Sensor Network Simulation")
         
-        self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
-        self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
+        # Kolory dla różnych stanów sensorów
+        self.COLORS = {
+            'active': 'blue',
+            'inactive': 'gray',
+            'sleeping': 'purple',
+            'main_unit': 'red'
+        }
         
-        self.optimizer = optim.Adam(self.parameters(), lr=lr)
-        self.loss = nn.MSELoss()
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-        self.to(self.device)
-
-    def forward(self, state):
-        x = F.relu(self.fc1(state))
-        x = F.relu(self.fc2(x))
-        actions = self.fc3(x)
-        return actions
-
-class Agent():
-    def __init__(self, gamma, epsilon, lr, input_dims, batch_size, n_actions,
-                 max_mem_size=1000000, eps_end=0.01, eps_dec=5e-4):
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.eps_min = eps_end
-        self.eps_dec = eps_dec
-        self.lr = lr
-        self.action_space = [i for i in range(n_actions)]
-        self.mem_size = max_mem_size
-        self.batch_size = batch_size
-        self.mem_cntr = 0
-
-        self.Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
-                                 input_dims=input_dims, 
-                                 fc1_dims=256, fc2_dims=256)
+        # Inicjalizacja zmiennych symulacji
+        self.is_running = False
+        self.current_step = 0
+        self.simulation_speed = 500
         
-        self.best_Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, 
-                                 input_dims=input_dims, 
-                                 fc1_dims=256, fc2_dims=256)
+        self.setup_ui()
+        
+        # Inicjalizacja sieci i wykonanie pierwszego kroku
+        self.network = SensorNetwork(NETWORK_AREA)
+        self.perform_initial_step()  # Nowa metoda wykonująca pierwszy krok
+        
+    def setup_ui(self):
+        # Konfiguracja interfejsu użytkownika
+        self.control_frame = ttk.Frame(self.master, padding="10")
+        self.control_frame.pack(side=tk.LEFT, fill=tk.Y)
+        
+        self.visualization_frame = ttk.Frame(self.master, padding="10")
+        self.visualization_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
+        
+        self.setup_control_panel()
+        self.setup_visualization()
+        self.setup_energy_plot()
 
-        self.state_memory = np.zeros((self.mem_size, input_dims), dtype=np.float32)
-        self.new_state_memory = np.zeros((self.mem_size, input_dims), dtype=np.float32)
-        self.action_memory = np.zeros(self.mem_size, dtype=np.int32)
-        self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
-        self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
+    def perform_initial_step(self):
+        """Wykonuje pierwszy krok symulacji i aktualizuje wizualizację"""
+        observation, reward, done, _ = self.network.step()
+        self.current_step += 1
+        self.update_visualization()
+        self.score_label.config(text=f"Current score: {reward}")
 
-    def store_transition(self, state, action, reward, state_, done):
-        index = self.mem_cntr % self.mem_size
-        self.state_memory[index] = state
-        self.new_state_memory[index] = state_
-        self.reward_memory[index] = reward
-        self.action_memory[index] = action
-        self.terminal_memory[index] = done
+    def setup_control_panel(self):
+        # Przyciski kontrolne
+        self.start_button = ttk.Button(self.control_frame, text="Start", command=self.start_simulation)
+        self.start_button.pack(fill=tk.X, pady=5)
+        
+        self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_simulation, state=tk.DISABLED)
+        self.pause_button.pack(fill=tk.X, pady=5)
+        
+        self.step_button = ttk.Button(self.control_frame, text="Step", command=self.step_simulation)
+        self.step_button.pack(fill=tk.X, pady=5)
+        
+        self.reset_button = ttk.Button(self.control_frame, text="Reset", command=self.reset_simulation)
+        self.reset_button.pack(fill=tk.X, pady=5)
+        
+        # Przycisk pełnej symulacji
+        self.full_sim_button = ttk.Button(self.control_frame, text="Run Full Simulation", 
+                                        command=self.run_full_simulation)
+        self.full_sim_button.pack(fill=tk.X, pady=5)
+        
+        # Kontrola prędkości
+        self.speed_label = ttk.Label(self.control_frame, text="Simulation Speed:")
+        self.speed_label.pack(fill=tk.X, pady=(10,0))
+        
+        self.speed_slider = ttk.Scale(self.control_frame, from_=50, to=1000, 
+                                    command=self.update_speed, orient=tk.HORIZONTAL)
+        self.speed_slider.set(self.simulation_speed)
+        self.speed_slider.pack(fill=tk.X)
+        
+        # Panel statystyk
+        self.stats_frame = ttk.LabelFrame(self.control_frame, text="Statistics", padding="10")
+        self.stats_frame.pack(fill=tk.X, pady=10)
+        
+        self.time_label = ttk.Label(self.stats_frame, text=f"Time step: {self.current_step}/{DURATION}")
+        self.time_label.pack(anchor=tk.W)
+        
+        self.data_label = ttk.Label(self.stats_frame, text="Data collected: 0")
+        self.data_label.pack(anchor=tk.W)
+        
+        self.active_label = ttk.Label(self.stats_frame, text="Active sensors: 10")
+        self.active_label.pack(anchor=tk.W)
+        
+        self.score_label = ttk.Label(self.stats_frame, text="Current score: 0")
+        self.score_label.pack(anchor=tk.W)
+        
+    def setup_visualization(self):
+        # Canvas do wizualizacji sieci
+        self.canvas = tk.Canvas(self.visualization_frame, bg='white', 
+                               width=NETWORK_AREA[0]*5, height=NETWORK_AREA[1]*5)
+        self.canvas.pack(expand=True, fill=tk.BOTH)
+        
+        # Legenda
+        legend_frame = ttk.Frame(self.visualization_frame)
+        legend_frame.pack(fill=tk.X)
+        
+        ttk.Label(legend_frame, text="Legend:").pack(side=tk.LEFT)
+        
+        # Dodanie wszystkich stanów do legendy
+        colors = ['main_unit', 'active', 'sleeping', 'inactive']
+        for color_type in colors:
+            tk.Canvas(legend_frame, width=20, height=20, 
+                      bg=self.COLORS[color_type]).pack(side=tk.LEFT, padx=5)
+            ttk.Label(legend_frame, text=color_type.capitalize()).pack(side=tk.LEFT)
 
-        self.mem_cntr += 1
+    def setup_energy_plot(self):
+        # Wykres energii
+        self.energy_fig, self.energy_ax = plt.subplots(figsize=(4, 2), dpi=80)
+        self.energy_ax.set_title("Sensor Energy Levels")
+        self.energy_ax.set_ylim(0, BATTERY_CAPACITY)
+        self.energy_ax.set_xlim(0, NUM_OF_SENSORS_IN_NETWORK+1)
+        
+        self.energy_canvas = FigureCanvasTkAgg(self.energy_fig, master=self.energy_plot_frame)
+        self.energy_canvas.draw()
+        self.energy_canvas.get_tk_widget().pack(fill=tk.X)
 
-    def choose_action(self, observation):
-        if np.random.random() > self.epsilon:
-            state = T.tensor([observation]).to(self.Q_eval.device)
-            actions = self.Q_eval.forward(state)
-            action = T.argmax(actions).item()
+    def update_visualization(self):
+        self.canvas.delete("all")
+        
+        # Rysuj główną jednostkę
+        self.draw_main_unit()
+        
+        # Rysuj wszystkie sensory
+        for sensor in self.network.sensors[1:]:
+            self.draw_sensor(sensor)
+        
+        # Aktualizuj statystyki
+        self.update_stats()
+
+    def draw_main_unit(self):
+        main = self.network.sensors[0]
+        x = int(main.position[0][0]*5)
+        y = int(main.position[0][1]*5)
+        
+        self.canvas.create_oval(x-10, y-10, x+10, y+10, 
+                              fill=self.COLORS['main_unit'], outline='black')
+        self.canvas.create_text(x, y-15, text="Main Unit", font=('Arial', 8))
+        
+        cov_radius = int(float(main.transfer_coverage_distance)*5)
+        self.canvas.create_oval(x-cov_radius, y-cov_radius, 
+                               x+cov_radius, y+cov_radius, 
+                               outline='red', dash=(2,2))
+
+    def draw_sensor(self, sensor):
+        x = int(sensor.position[0][0]*5)
+        y = int(sensor.position[0][1]*5)
+        
+        # Wybierz kolor w zależności od stanu
+        if sensor.is_sleeping:
+            color = self.COLORS['sleeping']
+        elif sensor.is_active():
+            color = self.COLORS['active']
         else:
-            action = np.random.choice(self.action_space)
-        return action
-
-    def learn(self):
-        if self.mem_cntr < self.batch_size:
-            return
-
-        self.Q_eval.optimizer.zero_grad()
-
-        max_mem = min(self.mem_cntr, self.mem_size)
-        batch = np.random.choice(max_mem, self.batch_size, replace=False)
-        batch_index = np.arange(self.batch_size, dtype=np.int32)
-
-        state_batch = T.tensor(self.state_memory[batch]).to(self.Q_eval.device)
-        new_state_batch = T.tensor(self.new_state_memory[batch]).to(self.Q_eval.device)
-        reward_batch = T.tensor(self.reward_memory[batch]).to(self.Q_eval.device)
-        terminal_batch = T.tensor(self.terminal_memory[batch]).to(self.Q_eval.device)
-        action_batch = self.action_memory[batch]
-
-        q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
-        q_next = self.Q_eval.forward(new_state_batch)
-        q_next[terminal_batch] = 0.0
-
-        q_target = reward_batch + self.gamma * T.max(q_next, dim=1)[0]
-        loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
-        loss.backward()
-        self.Q_eval.optimizer.step()
-
-        self.epsilon = self.epsilon - self.eps_dec if self.epsilon > self.eps_min \
-                      else self.eps_min
-                      
-    def update_best_model(self):
-        self.best_Q_eval.load_state_dict(self.Q_eval.state_dict())
-
-class Data:
-    def __init__(self):
-        self.data = -1
-        self.communique = ''
-        self.device = -1 ,# from what device each data is
-        self.destination = None #where data should go 
+            color = self.COLORS['inactive']
         
-    def create_mined_data(self,device, destination) -> None:
-        self.data = 1
-        self.communique = 'mined data'
-        self.device = device
-        self.destination = destination
-              
+        # Rysuj sensor
+        self.canvas.create_oval(x-8, y-8, x+8, y+8, 
+                              fill=color, outline='black')
+        self.canvas.create_text(x, y-12, text=f"S{sensor.id}", font=('Arial', 7))
+        
+        # Rysuj obszar pokrycia tylko dla aktywnych sensorów
+        if sensor.is_active() and not sensor.is_sleeping:
+            cov_radius = int(float(sensor.coverage_radius)*5)
+            self.canvas.create_oval(x-cov_radius, y-cov_radius, 
+                                   x+cov_radius, y+cov_radius, 
+                                   outline='blue')
+        
+        # Rysuj połączenia
+        self.draw_connections(sensor, x, y)
 
+    def draw_connections(self, sensor, x, y):
+        for neighbor in sensor.routing_table:
+            if neighbor.id > sensor.id:
+                x2 = int(neighbor.position[0][0]*5)
+                y2 = int(neighbor.position[0][1]*5)
+                
+                # Linia przerywana dla uśpionych sensorów
+                dash_pattern = (3,2) if sensor.is_sleeping or neighbor.is_sleeping else (1,1)
+                self.canvas.create_line(x, y, x2, y2, 
+                                      fill='light gray', dash=dash_pattern)
 
+    def update_stats(self):
+        self.time_label.config(text=f"Time step: {self.current_step}/{DURATION}")
+        data_collected = len(self.network.sensors[0].colect_data_by_network)
+        self.data_label.config(text=f"Data collected: {data_collected}")
+        
+        active_count = 0
+        sleeping_count = 0
+        for sensor in self.network.sensors[1:]:
+            if sensor.is_sleeping:
+                sleeping_count += 1
+            elif sensor.is_active():
+                active_count += 1
+                
+        self.active_label.config(text=f"Active: {active_count}, Sleeping: {sleeping_count}, Inactive: {NUM_OF_SENSORS_IN_NETWORK-active_count-sleeping_count}")
+        
+        self.update_energy_plot()
 
-class Sensor:
-    def __init__(self, id: int, main_unit_pos, area_size = NETWORK_AREA, battery_capasity = BATTERY_CAPACITY):    
+    def update_energy_plot(self):
+        self.energy_ax.clear()
+        energies = [sensor.energy for sensor in self.network.sensors[1:]]
+        sensor_ids = [f"S{i}" for i in range(1, len(energies)+1)]
         
-        self.main_unit_position = main_unit_pos
-        self.energy = battery_capasity
-        self.area_size = area_size
+        colors = []
+        for sensor in self.network.sensors[1:]:
+            if sensor.is_sleeping:
+                colors.append('purple')
+            elif sensor.energy > TRANSMISSION_COST:
+                colors.append('blue')
+            else:
+                colors.append('red')
+                
+        self.energy_ax.bar(sensor_ids, energies, color=colors)
+        self.energy_ax.set_ylim(0, BATTERY_CAPACITY)
+        self.energy_ax.set_title("Sensor Energy Levels")
+        self.energy_ax.set_ylabel("Energy")
+        self.energy_canvas.draw()
+
+    # Pozostałe metody bez zmian
+    def start_simulation(self): 
+        if not self.is_running:
+            self.is_running = True
+            self.start_button.config(state=tk.DISABLED)
+            self.pause_button.config(state=tk.NORMAL)
+            self.step_button.config(state=tk.DISABLED)
+            self.run_simulation()
+            
+    def pause_simulation(self):
+        self.is_running = False
+        self.start_button.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+        self.step_button.config(state=tk.NORMAL)
         
-        self.position = np.random.rand(1, 2) * self.area_size  # Random sensor positions
-        self.coverage_radius = np.random.uniform(10, 20, 1)
-        self.transfer_coverage_distance = self.coverage_radius * 4
+    def reset_simulation(self):
+        self.pause_simulation()
+        self.current_step = 0
+        self.network = SensorNetwork(NETWORK_AREA)
+        self.perform_initial_step()  # Reset również wykonuje pierwszy krok
         
-        self.data_to_transfer  = []
-        self.recived_data = []
-        self.routing_table = []
-        
-        self.is_sleeping = False
-        self.sleep_time = 0
-        
-        self.id = id
-        
-      
-    def reset(self): 
-        self.energy = BATTERY_CAPACITY
-        self.data_to_transfer  = []
-        self.recived_data = []
-        self.is_sleeping = False
-        self.sleep_time = 0
-        
-    def recive_data(self, data: Data) -> int:
-        if data.destination == self.id:
-            self.recived_data.append(data)
+    def step_simulation(self):
+        if not self.is_running:
+            observation, reward, done, _ = self.network.step()
+            self.current_step += 1
+            self.score_label.config(text=f"Current score: {reward}")
+            self.update_visualization()
+            
+            if done:
+                self.pause_simulation()
+                print("Simulation completed!")
+                
+    def run_simulation(self):
+        if self.is_running and self.current_step < DURATION:
+            self.step_simulation()
+            self.master.after(self.simulation_speed, self.run_simulation)
         else:
-            self.send_data(data)
-        return 1
-        
-    def colect_data(self) -> bool: # if colected data return True, else False
-        if not self.is_active():
-            return False
-        if self.is_sleeping:
-            self.sleep_time -= 1
-            if self.sleep_time <= 0:
-                self.is_sleeping = False
-            return False
-        self.energy -= MINING_COST
-        mined = Data()
-        mined.create_mined_data(id, 0) # 0 is always id of main unit
-        if self.send_data(mined):
-            return True
-        return False
-        
-    def go_to_sleep(self,time: int) -> bool:
-        self.is_sleeping = True
-        self.sleep_time = time
-        return True
-        
-    def send_data(self, data: Data) -> bool:
-        if not self.routing_table or not self.is_active():
-            return False
-
-        # Wybierz sąsiada najbliższego do głównej jednostki (GPSR)
-        best_neighbor = min(
-            self.routing_table,
-            key=lambda neighbor: np.linalg.norm(neighbor.position - self.main_unit_position),
-        )
-        
-        if best_neighbor.is_active:
-            best_neighbor.recive_data(data)
-            self.energy -= TRANSMISSION_COST
-            return True
-        return False
-    
-    def is_active(self) -> bool:
-        if self.energy <= TRANSMISSION_COST or self.is_sleeping:
-            return False
-        return True
-        
-class main_unit(Sensor):
-    def __init__(self, id: int, area_size = NETWORK_AREA, battery_capasity = BATTERY_CAPACITY):
-        super(main_unit,self).__init__(id,area_size,battery_capasity)
-       
-        self.communicates = []
-        self.colect_data_by_network = []
-        self.transfer_coverage_distance = (float)(np.random.uniform(20, 40, 1)) 
-        self.agent = Agent(gamma=0.99, epsilon=1, batch_size=64, n_actions=NUM_OF_SENSORS_IN_NETWORK + 1, eps_end=0.01, input_dims=3*NUM_NODES + 2,   lr = 0.003)
-        
-        
-    def recive_data(self, data: Data) -> bool:
-        if data.destination == self.id:
-            self.colect_data_by_network.append(data)
-        else:
-            self.send_data(data)   
+            self.pause_simulation()
             
-    def reset(self): 
-        self.energy = BATTERY_CAPACITY
-        self.data_to_transfer  = []
-        self.recived_data = []
-        self.is_sleeping = False
-        self.sleep_time = 0
-        self.communicates = []
-        self.colect_data_by_network = []
-
-
-def distance_between_2_sensors(sensor1: Sensor, sensor2: Sensor):
-    # return math.sqrt((sensor2.position[0] - sensor1.position[0])**2 + (sensor2.position[1] - sensor1.position[1])**2)
-    return np.linalg.norm((sensor2.position) - (sensor1.position))
-   
+    def update_speed(self, value):
+        self.simulation_speed = int(float(value))
         
-class SensorNetwork:
-    def __init__(self, area_size, number_of_main_units = NUM_OF_MAIN_UNITS, num_sensors = NUM_OF_SENSORS_IN_NETWORK):
-        self.sensors = []
-        # self.main_unit = main_unit(0)
-        self.sensors.append(main_unit(0))
-        self.num_sensors = num_sensors
-        self.area_size = area_size
+    def run_full_simulation(self):
+        self.pause_simulation()
         
-        for i in range(1, num_sensors + 1):
-            self.sensors.append(Sensor(i,self.sensors[0].position))
-
-
-        for sensor in self.sensors:
-            for sensor_2 in self.sensors:
-                if sensor != sensor_2:
-                    if distance_between_2_sensors(sensor1=sensor, sensor2=sensor_2) <= (sensor.transfer_coverage_distance):
-                        sensor.routing_table.append(sensor_2)   
-                        
-      
-    
-    def step(self, action=None):
-        """Wykonuje krok symulacji i zwraca: observation, reward, done, info."""
-        reward = 0
-        done = False
-
-        # 1. Akcja agenta (jeśli jest przekazana)
-        if action is not None:
-            # Przykład: agent wybiera, który sensor ma zbierać dane
-            if not action >= self.num_sensors:
-                selected_sensor = self.sensors[action+1]  # +1 because main unit is at index 0
-                selected_sensor.go_to_sleep(15)  # set sleep time
-
-
-        # 2. Symulacja działania sieci
-        for sensor in self.sensors[1:]:
-            if sensor.is_active():
-                if sensor.colect_data():
-                    reward += 1  # Nagroda za udane zebranie danych
-                    reward -= 0.1  # Kara za zużycie energii
-
-        # 3. Obliczanie nagrody
-        # Przykładowe składowe nagrody:
-        # - Nagroda za dane dostarczone do głównej jednostki
-        reward += len(self.sensors[0].colect_data_by_network) 
-
-        # - Kara za zużycie energii
-        for sensor in self.sensors:
-            if sensor.energy <= 0:
-                reward -= 10
-
-        # 4. Sprawdzenie warunków zakończenia
-        if not self.is_active():
-            done = True
-
-        # 5. Przygotowanie obserwacji (stanu)
-        observation = self.get_observation()
-
-        return observation, reward, done, {}
-
-    def get_observation(self):
-        """Zwraca stan środowiska jako wektor numeryczny."""
-        # Przykład: energia każdego sensora + liczba danych w głównej jednostce
-        observation = []
-        for sensor in self.sensors:
-            observation.append(sensor.energy / BATTERY_CAPACITY)  # Normalizacja
-        observation.append(len(self.sensors[0].colect_data_by_network))
-        for sensor in self.sensors:
-            observation.append(sensor.position[0][0] / self.area_size[0])
-            observation.append(sensor.position[0][1] / self.area_size[1])
-        # Dodajemy inne istotne informacje, np. liczba aktywnych sensorów
-        active_sensors = sum(1 for sensor in self.sensors if sensor.is_active)
-        observation.append(active_sensors / self.num_sensors)  # Normalizacja liczby aktywnych sensorów     
-        return np.array(observation, dtype=np.float32)
+        def run_in_thread():
+            self.start_button.config(state=tk.DISABLED)
+            self.pause_button.config(state=tk.DISABLED)
+            self.step_button.config(state=tk.DISABLED)
+            self.reset_button.config(state=tk.DISABLED)
             
+            # Uruchom pełną symulację
+            main_units = symulation()
             
-    def is_active(self):
-        """Checks if at least one sensor still has enough energy to operate."""
-        for sensor in self.sensors[1:]: 
-            if sensor.is_active():
-                return True
-        return False
-    
-    def reset(self):
-        for sensor in self.sensors:
-            sensor.reset()      
-        observation = self.get_observation()
-        return observation
+            # Aktualizuj stan końcowy
+            self.network = SensorNetwork(NETWORK_AREA)
+            if main_units:
+                self.network.sensors[0] = main_units[-1]
+            self.current_step = DURATION
+            self.update_visualization()
+            
+            self.start_button.config(state=tk.NORMAL)
+            self.reset_button.config(state=tk.NORMAL)
+            self.step_button.config(state=tk.NORMAL)
+            
+        threading.Thread(target=run_in_thread, daemon=True).start()
 
-          
-          
-          
-          
-          
-          
-          
-
-
-
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = SensorNetworkGUI(root)
+    root.mainloop()
