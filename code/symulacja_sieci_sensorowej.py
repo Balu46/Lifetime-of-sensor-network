@@ -368,6 +368,7 @@ def symulation() -> List[main_unit]:
     
     history = []    
     
+    
     path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji.txt"
     
     # create a file to store the results
@@ -403,8 +404,18 @@ def symulation() -> List[main_unit]:
                 "collected_data": len(network.sensors[0].colect_data_by_network),
                 "transfer_distance": float(network.sensors[0].transfer_coverage_distance),
                 "is_sleeping": network.sensors[0].is_sleeping,
-                "coverage_radius": float(network.sensors[0].coverage_radius)
+                "coverage_radius": float(network.sensors[0].coverage_radius),
+                "data" : [
+                {
+                    "from_device": data.route[0],
+                    "destination" : data.destination,
+                    "route" : data.route 
+                }
+                for data in network.sensors[0].colect_data_by_network
+                
+                ],
             },
+
             "sensors": [
                 {
                     "id": sensor.id,
@@ -430,14 +441,12 @@ def symulation() -> List[main_unit]:
     if score > best_score:
         best_score = score
         network.sensors[0].agent.update_best_model()
-                
         
     with open(path_for_log_energy, "a") as file:
-        file.write(f"Game {1}:\n")
-        file.write(f"Time used: {t}\n")
-        file.write(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}\n")
-        file.write(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}\n\n\n")
-                
+            file.write(f"Game {i}:\n")
+            file.write(f"Time used: {t}\n")
+            file.write(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}\n")
+            file.write(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}\n\n\n")        
 
     return history
           

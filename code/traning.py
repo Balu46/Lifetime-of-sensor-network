@@ -83,29 +83,3 @@ traning()
    
    
    
-   
-    
-# x = [i+1 for i in range(N_GAMES)]
-# filename = 'wyuczenie _sieci.png'
-# plot_learning_curve(x, scores, eps_history, filename)
-
-
-
-# # Wyniki
-# print(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}")
-# print(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}")
-
-# # Wizualizacja
-# plt.figure(figsize=(10, 8))
-# plt.scatter(
-#     [s.position[0][0] for s in network.sensors],
-#     [s.position[0][1] for s in network.sensors],
-#     c=['red' if s.id == 0 else 'blue' for s in network.sensors],
-#     label='Główna jednostka (czerwony)'
-# )
-# plt.title("Pozycje sensorów w sieci")
-# plt.xlabel("X")
-# plt.ylabel("Y")
-# plt.grid(True)
-# plt.legend()
-# plt.savefig("/home/jan/Informatyka/Projekt_indywidualny/temp4.png")

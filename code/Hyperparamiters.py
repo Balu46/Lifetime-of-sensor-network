@@ -16,5 +16,3 @@ NUM_NODES = NUM_OF_MAIN_UNITS + NUM_OF_SENSORS_IN_NETWORK
 N_GAMES = 1 # Number of symulacion at once
 
 N_GAMES_FOR_TRANING = 100 # Number of symulacion for traning
-
-DURATION = 100

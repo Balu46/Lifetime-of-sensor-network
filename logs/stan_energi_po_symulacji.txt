@@ -1,6 +1,0 @@
-Game 1:
-Time used: 179
-Dane zebrane przez główną jednostkę: 70
-Energia pozostała w sensorach: [3, 4, 4, 4, 4, 4, 2, 5, 4, 4]
-
-
