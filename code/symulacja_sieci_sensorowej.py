@@ -58,7 +58,7 @@ class Agent():
                                  fc1_dims=256, fc2_dims=256)
 
 
-        if os.path.exists(self.path):
+        if os.path.exists(self.path) and LOAD_BEST_MODEL:
             self.Q_eval.load_state_dict(T.load(self.path))
             self.best_Q_eval.to(self.Q_eval.device)
             print(f"Model załadowany z pliku: {self.path}")
@@ -122,7 +122,8 @@ class Agent():
         self.best_Q_eval.load_state_dict(self.Q_eval.state_dict())
         
     def save_best_model(self, filename):
-        T.save(self.best_Q_eval.state_dict(), filename)
+        if SAVE_BEST_MODEL:
+            T.save(self.best_Q_eval.state_dict(), filename)
 
 class Data:
     def __init__(self):
@@ -284,43 +285,39 @@ class SensorNetwork:
                 selected_sensor.go_to_sleep(15)  # set sleep time
 
 
-        # 2. Symulacja działania sieci
+       
         for sensor in self.sensors[1:]:
             if sensor.is_active():
                 if sensor.colect_data():
-                    reward -= 1  # Kara za zużycie energii
+                    reward -= 1  # - Penalty for sensors using energy
 
 
-        # Nagroda za dane dostarczone do głównej jednostki
+        # Reward for main unit collecting data
         reward += len(self.sensors[0].colect_data_by_network) * 2
 
-        # - Kara za zużycie energii
+        # - Penalty for sensors with low energy
         for sensor in self.sensors:
             if sensor.energy <= TRANSMISSION_COST or sensor.energy <= MINING_COST:
                 reward -= 10
 
-        # 4. Sprawdzenie warunków zakończenia
         if not self.is_active():
             done = True
 
-        # 5. Przygotowanie obserwacji (stanu)
         observation = self.get_observation()
 
         return observation, reward, done, {}
 
     def get_observation(self):
         """Zwraca stan środowiska jako wektor numeryczny."""
-        # Przykład: energia każdego sensora + liczba danych w głównej jednostce
         observation = []
         for sensor in self.sensors:
-            observation.append(sensor.energy / BATTERY_CAPACITY)  # Normalizacja
+            observation.append(sensor.energy / BATTERY_CAPACITY)  # Normalization
         observation.append(len(self.sensors[0].colect_data_by_network))
         for sensor in self.sensors:
             observation.append(sensor.position[0][0] / self.area_size[0])
             observation.append(sensor.position[0][1] / self.area_size[1])
-        # Dodajemy inne istotne informacje, np. liczba aktywnych sensorów
         active_sensors = sum(1 for sensor in self.sensors if sensor.is_active)
-        observation.append(active_sensors / self.num_sensors)  # Normalizacja liczby aktywnych sensorów     
+        observation.append(active_sensors / self.num_sensors)   
         return np.array(observation, dtype=np.float32)
             
             
@@ -353,7 +350,7 @@ def load_history_from_file(filename="simulation_history.json"):
           
           
           
-def symulation() -> List[main_unit]:
+def symulation() :
     """
     Function to train the sensor network.
     This function initializes the sensor network and runs a series of training episodes.
@@ -443,12 +440,109 @@ def symulation() -> List[main_unit]:
         network.sensors[0].agent.update_best_model()
         
     with open(path_for_log_energy, "a") as file:
-            file.write(f"Game {i}:\n")
+            file.write(f"Symulacja:\n")
             file.write(f"Time used: {t}\n")
             file.write(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}\n")
             file.write(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}\n\n\n")        
 
     return history
           
-          
+     
+     
+     
+def symulation_witout_optymalizacion():
+    """
+    Function to train the sensor network.
+    This function initializes the sensor network and runs a series of training episodes.
+    Each episode consists of a series of time steps where the sensors interact with the environment.
+    The training process involves choosing actions, receiving rewards, and updating the agent's knowledge.
+    """
+    # Initialize the network
+    network = SensorNetwork(NETWORK_AREA)
+    scores ,eps_history = [], []
+    
+    best_score = 0
+    
+    history = []    
+    
+    
+    path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji.txt"
+    
+    # create a file to store the results
+    # This file will be used to log the energy state of the sensors after each game
+    with open(path_for_log_energy, "w") as f:
+        pass 
+
+    
+    # Sensor network simulation
+    t = 0 #time spent in symulation
+            
+    step = 0
+    score = 0
+    done = False
+    observation = network.reset()
+    while not done:
+        
+        observation_, reward, done, info = network.step(None)
+        score += reward
+        t+=1
+        history.append({
+            "step": step + 1,
+            "main_unit": {
+                "id": network.sensors[0].id,
+                "energy": network.sensors[0].energy,
+                "position": network.sensors[0].position.tolist(),
+                "collected_data": len(network.sensors[0].colect_data_by_network),
+                "transfer_distance": float(network.sensors[0].transfer_coverage_distance),
+                "is_sleeping": network.sensors[0].is_sleeping,
+                "coverage_radius": float(network.sensors[0].coverage_radius),
+                "data" : [
+                {
+                    "from_device": data.route[0],
+                    "destination" : data.destination,
+                    "route" : data.route 
+                }
+                for data in network.sensors[0].colect_data_by_network
+                
+                ],
+            },
+
+            "sensors": [
+                {
+                    "id": sensor.id,
+                    "energy": sensor.energy,
+                    "position": sensor.position.tolist(),
+                    "is_sleeping": sensor.is_sleeping,
+                    "sleep_time": sensor.sleep_time,
+                    "coverage_radius": float(sensor.coverage_radius),
+                    "transfer_distance": float(sensor.transfer_coverage_distance)
+                }
+                for sensor in network.sensors[1:]   
+            ],
+            "reward": reward,
+            "data_collected": len(network.sensors[0].colect_data_by_network)
+        })
+        step += 1
+    
+    
+    scores.append(score)
+    eps_history.append(network.sensors[0].agent.epsilon)
+
+    avg_score = np.mean(scores[-100:])
+    if score > best_score:
+        best_score = score
+        network.sensors[0].agent.update_best_model()
+        
+    with open(path_for_log_energy, "a") as file:
+            file.write(f"Symulacja:\n")
+            file.write(f"Time used: {t}\n")
+            file.write(f"Dane zebrane przez główną jednostkę: {len(network.sensors[0].colect_data_by_network)}\n")
+            file.write(f"Energia pozostała w sensorach: {[s.energy for s in network.sensors[1:]]}\n\n\n")        
+
+    return history
+               
+
+
+
+     
 print("Starting simulation...")

@@ -1,16 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from PIL import Image, ImageTk, ImageDraw
-from symulacja_sieci_sensorowej import SensorNetwork, Sensor, symulation
-from typing import List
+from symulacja_sieci_sensorowej import symulation, symulation_witout_optymalizacion
 import numpy as np
-import math
-import time
 import tkinter as tk
 from tkinter import ttk
-import numpy as np
-import time
-import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from Hyperparamiters import *
@@ -223,7 +216,7 @@ class SensorNetworkVisualizer:
         
         # Draw coverage area if active
         if color == self.COLORS['active']:
-            cov_radius = int(sensor["coverage_radius"]*5)
+            cov_radius = int(sensor["transfer_distance"]*5)
             self.canvas.create_oval(x-cov_radius, y-cov_radius, 
                                    x+cov_radius, y+cov_radius, 
                                    outline='blue')

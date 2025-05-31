@@ -1,6 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+""" this code is to plot the learning curve of the agent during training. now it is not used in the training process,
+    but it can be used to visualize the training progress. You should expect to see some bugs using this function i did not test thsi becouse it was not used """
+
 def plot_learning_curve(x, scores, epsilons, filename, lines=None):
     fig = plt.figure()
     ax = fig.add_subplot(111, label="1")

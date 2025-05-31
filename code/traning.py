@@ -73,6 +73,7 @@ def traning():
                 'epsilon %.2f' % network.sensors[0].agent.epsilon)
     
     network.sensors[0].agent.save_best_model('/home/jan/Informatyka/Projekt_indywidualny/code/models/best_model.pth')
+    print('Best moel saved')
     
     
       
