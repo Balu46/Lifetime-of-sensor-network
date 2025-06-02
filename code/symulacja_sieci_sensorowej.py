@@ -59,7 +59,7 @@ class Agent():
 
 
         if os.path.exists(self.path) and LOAD_BEST_MODEL:
-            self.Q_eval.load_state_dict(T.load(self.path))
+            self.Q_eval.load_state_dict(T.load(self.path, map_location=self.Q_eval.device))
             self.best_Q_eval.to(self.Q_eval.device)
             print(f"Model załadowany z pliku: {self.path}")
         else:
