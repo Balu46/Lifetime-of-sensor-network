@@ -4,6 +4,7 @@
 │   symulacja_sieci_sensorowej.py
 │   traning.py
 │   utils.py
+│   chatrts.py
 │   Hyperparameters.py
 |    └───models
 |        best_model.pth
@@ -12,6 +13,7 @@
 │       simulation_data.json
 │       stan_energi_po_symulacji_bez_niczego.txt
 |       stan_energi_po_symulacji.txt 
+│       zdjecia_obrazujące_przebieg_symulacji
 │
 ├───models
 |       best_model.pth

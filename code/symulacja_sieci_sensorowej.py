@@ -525,7 +525,7 @@ def symulation_witout_optymalizacion():
     history = []    
     
     
-    path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji.txt"
+    path_for_log_energy = "/home/jan/Informatyka/Projekt_indywidualny/logs/stan_energi_po_symulacji_bez_niczego.txt"
     
     # create a file to store the results
     # This file will be used to log the energy state of the sensors after each game
