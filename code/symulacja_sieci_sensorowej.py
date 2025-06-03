@@ -12,6 +12,15 @@ from Hyperparamiters import *
 import json
 
 class DeepQNetwork(nn.Module):
+    """Implementacja sieci neuronowej DQN do uczenia przez wzmacnianie.
+    
+    Atrybuty:
+        input_dims (int): Wymiar wejścia sieci
+        fc1_dims (int): Rozmiar pierwszej warstwy ukrytej
+        fc2_dims (int): Rozmiar drugiej warstwy ukrytej
+        n_actions (int): Liczba możliwych akcji
+        device (torch.device): Urządzenie do obliczeń (CPU/GPU)
+    """
     def __init__(self, lr, input_dims, fc1_dims, fc2_dims, n_actions):
         super(DeepQNetwork, self).__init__()
         self.input_dims = input_dims
@@ -35,6 +44,17 @@ class DeepQNetwork(nn.Module):
         return actions
 
 class Agent():
+    """Agent wykorzystujący DQN do podejmowania decyzji w sieci sensorowej.
+    
+    Atrybuty:
+        gamma (float): Współczynnik dyskontowania
+        epsilon (float): Współczynnik eksploracji
+        lr (float): Szybkość uczenia
+        action_space (list): Przestrzeń możliwych akcji
+        mem_size (int): Rozmiar pamięci doświadczeń
+        Q_eval (DeepQNetwork): Główna sieć Q
+        best_Q_eval (DeepQNetwork): Najlepsza sieć Q
+    """
     def __init__(self, gamma, epsilon, lr, input_dims, batch_size, n_actions,
                  max_mem_size=1000000, eps_end=0.01, eps_dec=5e-4):
         self.gamma = gamma
@@ -82,6 +102,14 @@ class Agent():
         self.mem_cntr += 1
 
     def choose_action(self, observation):
+        """Wybierz akcję na podstawie obserwacji (ε-zachłannie).
+    
+        Args:
+            observation: Aktualny stan środowiska
+        
+        Returns:
+            int: Wybrana akcja (indeks sensora do uśpienia)
+        """
         if np.random.random() > self.epsilon:
             state = T.tensor([observation]).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
@@ -143,6 +171,15 @@ class Data:
 
 
 class Sensor:
+    """Pojedynczy sensor w sieci.
+    
+    Atrybuty:
+        id (int): Unikalny identyfikator sensora
+        position (np.array): Pozycja (x,y) w przestrzeni 2D
+        energy (float): Pozostała energia
+        is_sleeping (bool): Czy sensor jest w trybie uśpienia
+        routing_table (list): Lista sąsiednich sensorów
+    """
     def __init__(self, id: int, main_unit_pos, area_size = NETWORK_AREA, battery_capasity = BATTERY_CAPACITY):    
         
         self.main_unit_position = main_unit_pos
@@ -199,6 +236,14 @@ class Sensor:
         return True
         
     def send_data(self, data: Data) -> bool:
+        """Przesyła dane do sąsiada najbliższego głównej jednostki (algorytm GPSR).
+    
+        Args:
+            data (Data): Dane do przesłania
+        
+        Returns:
+            bool: True jeśli przesłanie się powiodło
+        """
         if not self.routing_table or not self.is_active():
             return False
 
@@ -253,6 +298,13 @@ def distance_between_2_sensors(sensor1: Sensor, sensor2: Sensor):
    
         
 class SensorNetwork:
+    """Główna klasa zarządzająca całą siecią sensorów.
+    
+    Atrybuty:
+        sensors (list): Lista wszystkich sensorów
+        area_size (tuple): Rozmiar obszaru sieci
+    """
+
     def __init__(self, area_size, number_of_main_units = NUM_OF_MAIN_UNITS, num_sensors = NUM_OF_SENSORS_IN_NETWORK):
         self.sensors = []
         # self.main_unit = main_unit(0)
@@ -273,7 +325,14 @@ class SensorNetwork:
       
     
     def step(self, action=None):
-        """Wykonuje krok symulacji i zwraca: observation, reward, done, info."""
+        """Wykonuje krok symulacji.
+    
+        Args:
+            action: Akcja podjęta przez agenta
+        
+        Returns:
+            tuple: (observation, reward, done, info)
+        """
         reward = 0
         done = False
 

@@ -1,6 +1,6 @@
 Symulacja:
-Time used: 4860
-Dane zebrane przez główną jednostkę: 35
-Energia pozostała w sensorach: [4, 4, 4, 4, 4, 5, 4, 4, 1, 3]
+Time used: 232
+Dane zebrane przez główną jednostkę: 100
+Energia pozostała w sensorach: [4, 4, 1, 4, 4, 3, 4, 4, 4, 5]
 
 
