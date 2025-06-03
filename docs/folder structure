@@ -1,0 +1,23 @@
+/Projekt_indywidualny
+├───code
+│   GUI.py
+│   symulacja_sieci_sensorowej.py
+│   traning.py
+│   utils.py
+│   Hyperparameters.py
+|    └───models
+|        best_model.pth
+│
+├───logs
+│       simulation_data.json
+│       stan_energi_po_symulacji_bez_niczego.txt
+|       stan_energi_po_symulacji.txt 
+│
+├───models
+|       best_model.pth
+├───diagrams
+│       classes_GUI.png
+│       classes_SensorNetwork.png
+├───docs
+│       folder_structure
+|       Projekt indywidualny - sieć sensorowa.vpp
